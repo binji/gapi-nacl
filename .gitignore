@@ -1,0 +1,5 @@
+*.pyc
+build.ninja
+.ninja_log
+nacl_sdk
+out/

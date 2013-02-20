@@ -1,0 +1,13 @@
+{
+  "name": "GAPI test",
+  "version": "1.0.1",
+  "manifest_version": 2,
+  "description": "...",
+  "offline_enabled": true,
+  "app": {
+    "background": {
+      "scripts": ["background.js"]
+    }
+  }
+}
+
