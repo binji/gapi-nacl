@@ -84,6 +84,17 @@ def PathToLibname(p):
 
 
 MAKE_NINJA = os.path.relpath(__file__, ROOT_DIR)
+YAJL_SOURCE_FILES = [
+  'third_party/yajl/src/yajl_alloc.c',
+  'third_party/yajl/src/yajl_buf.c',
+  'third_party/yajl/src/yajl.c',
+  'third_party/yajl/src/yajl_encode.c',
+  'third_party/yajl/src/yajl_gen.c',
+  'third_party/yajl/src/yajl_lex.c',
+  'third_party/yajl/src/yajl_parser.c',
+  'third_party/yajl/src/yajl_tree.c',
+  'third_party/yajl/src/yajl_version.c',
+]
 SOURCE_FILES = [
   'src/gapi.cc',
 ]
@@ -159,6 +170,12 @@ def main():
   w.variable('cxx-arm', Path('$toolchain_dir_arm/bin/arm-nacl-g++'))
   w.variable('ar-arm', Path('$toolchain_dir_arm/bin/arm-nacl-ar'))
 
+  if WINDOWS:
+    cmd = Python('script/cp.py $in $out')
+  else:
+    cmd = 'cp $in $out'
+  w.rule('cp', command=cmd, description='CP $out')
+
   Code(w)
   Data(w)
   Package(w)
@@ -169,11 +186,14 @@ def main():
     f.write(s.getvalue())
 
 
-def BuildProject(w, name, rule, sources,
-                 includedirs=None, libs=None, order_only=None, defines=None):
-  includedirs = includedirs or []
-  libs = libs or []
-  defines = defines or []
+def BuildProject(w, name, rule, sources, **kwargs):
+  includedirs = kwargs.get('includedirs', [])
+  libs = kwargs.get('libs', [])
+  defines = kwargs.get('defines', [])
+  order_only = kwargs.get('order_only', None)
+  proj_ccflags = kwargs.get('ccflags', [])
+  proj_cxxflags = kwargs.get('cxxflags', [])
+
   libfiles = [l for l in libs if os.path.dirname(l)]
   libnames = [l for l in libs if not os.path.dirname(l)]
   libdirs = sorted(set([os.path.dirname(l) for l in libfiles]))
@@ -185,14 +205,18 @@ def BuildProject(w, name, rule, sources,
     arch_libs = Prefix('-l', [x.format(**vars()) for x in libs])
     arch_libfiles = [x.format(**vars()) for x in libfiles]
     arch_defines = Prefix('-D', [x.format(**vars()) for x in defines])
+    proj_arch_ccflags = ' '.join([x.format(**vars()) for x in proj_ccflags])
+    proj_arch_cxxflags = ' '.join([x.format(**vars()) for x in proj_cxxflags])
 
     ccflags_name = 'ccflags{arch}_{name}'.format(**vars())
     cxxflags_name = 'cxxflags{arch}_{name}'.format(**vars())
     ldflags_name = 'ldflags{arch}_{name}'.format(**vars())
     w.variable(ccflags_name,
-               '$base_ccflags {arch_incdirs} {arch_defines}'.format(**vars()))
+               '$base_ccflags {proj_arch_ccflags} '
+               '{arch_incdirs} {arch_defines}'.format(**vars()))
     w.variable(cxxflags_name,
-               '$base_cxxflags {arch_incdirs} {arch_defines}'.format(**vars()))
+               '$base_cxxflags {proj_arch_cxxflags} '
+               '{arch_incdirs} {arch_defines}'.format(**vars()))
     w.variable(ldflags_name, '{arch_libdirs} {arch_libs}'.format(**vars()))
 
     objs = [SourceToObj(x, arch) for x in sources]
@@ -234,8 +258,28 @@ def Code(w):
 
 #  w.variable('base_ccflags', '-g')
 #  w.variable('base_cxxflags', '-g -std=c++0x')
-  w.variable('base_ccflags', '-g -O3')
+  w.variable('base_ccflags', '-g -std=c99 -O3')
   w.variable('base_cxxflags', '-g -std=c++0x -O3')
+
+  # Copy yajl headers
+  yajl_headers = []
+  for name in ['common', 'gen', 'parse', 'tree']:
+    out_name = 'out/yajl/yajl_%s.h' % name
+    yajl_headers.append(out_name)
+    w.build(out_name, 'cp', 'third_party/yajl/src/api/yajl_%s.h' % name)
+  w.rule('version',
+      command='script/version.py $in -o $out',
+      description='VERSION $out')
+  w.build('out/yajl/yajl_version.h', 'version',
+      'third_party/yajl/src/api/yajl_version.h.cmake')
+  yajl_headers.append('out/yajl/yajl_version.h')
+
+  BuildProject(
+    w, 'libyajl', 'ar',
+    YAJL_SOURCE_FILES,
+    includedirs=['out'],
+    order_only=yajl_headers,
+    ccflags=['-std=c99'])
 
   BuildProject(
     w, 'gapi_test', 'link',
@@ -245,6 +289,7 @@ def Code(w):
       'out',
       '$nacl_sdk_root/include'],
     libs=[
+      'out/libyajl_{arch}.a',
       'ppapi_cpp',
       'ppapi'])
 
@@ -262,11 +307,6 @@ def Code(w):
 def Data(w):
   w.newline()
 
-  if WINDOWS:
-    cmd = Python('script/cp.py $in $out')
-  else:
-    cmd = 'cp $in $out'
-  w.rule('cp', command=cmd, description='CP $out')
   for outf, inf in zip(DST_DATA_FILES, SRC_DATA_FILES):
     w.build(outf, 'cp', inf)
 
