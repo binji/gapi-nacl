@@ -1,5 +1,6 @@
 *.pyc
-build.ninja
-.ninja_log
-nacl_sdk
+/build.ninja
+/.ninja_log
+/nacl_sdk
 out/
+/script/*.json
