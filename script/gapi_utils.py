@@ -34,12 +34,21 @@ def MakeCIdentifier(s):
   return re.sub(r'\W', '_', s)
 
 
+def MakeIncludeGuard(name, version):
+  "name_version -> NAME_VERSION_H_"
+  return re.sub(r'\W', '_', name.upper() + '_' + version.upper() + '_H_')
+
+
 def SnakeCase(s):
   return MakeCIdentifier(MixedCaseToSnakeCase(s))
 
 
 def CapWords(s):
   return MakeCIdentifier(MixedCaseToCapWords(s))
+
+
+def Upper(s):
+  return MakeCIdentifier(s.upper())
 
 
 def WrapType(outer, inner):

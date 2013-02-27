@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import cStringIO
 import json
 import os
 import re
@@ -127,51 +128,173 @@ class Service(object):
   def EndPropertyTypeObject(self, prop_name, prop, schema_name): pass
 
 
+HEADER_HEAD = """\
+#ifndef {include_guard}
+#define {include_guard}
+
+#include <map>
+#include <tr1/memory>
+#include <vector>
+#include <string>
+
+{forward_dec}
+
+"""
+
+HEADER_FOOT = """\
+#endif  // {include_guard}
+"""
+
 class CHeaderService(Service):
   def __init__(self, service):
-    self.f = None
+    self.f = cStringIO.StringIO()
     self.indent = ''
     self.prop_stack = []
+    self.schema_stack = []
+    self.toplevel_schemas = []
     super(CHeaderService, self).__init__(service)
-  def BeginService(self, name, version):
-    self.f = open('out/%s_%s.h' % (name, version), 'w')
+
   def EndService(self, name, version):
-    self.f.close()
+    with open('out/%s_%s.h' % (name, version), 'w') as outf:
+      include_guard = gapi_utils.MakeIncludeGuard(name, version)
+      forward_dec = '\n'.join('struct %s;' % x for x in self.toplevel_schemas)
+      outf.write(HEADER_HEAD.format(**vars()))
+      outf.write(self.f.getvalue())
+      outf.write(HEADER_FOOT.format(**vars()))
+
   def BeginSchema(self, schema_name, schema):
+    if not self.schema_stack:
+      self.toplevel_schemas.append(schema_name)
+    self.schema_stack.append(schema_name)
     self.f.write('%sstruct %s {\n' % (self.indent, schema_name))
     self.indent += '  '
+
   def EndSchema(self, schema_name, schema):
     WriteJsonComment(self.f, schema, self.indent, 80)
     self.indent = self.indent[:-2]
     self.f.write('%s};\n\n' % (self.indent,))
+    self.schema_stack.pop()
+
   def BeginProperty(self, prop_name, prop):
     self.prop_stack.append('')
+
   def EndProperty(self, prop_name, prop):
     self.f.write('%s%s %s;\n\n' % (
         self.indent,
         self.prop_stack[-1],
         gapi_utils.SnakeCase(prop_name)))
     self.prop_stack.pop()
+
   def OnPropertyComment(self, prop_name, prop, comment):
     for line in comment.splitlines():
       WriteWrappedComment(self.f, line, self.indent, 80)
+
   def OnPropertyTypeRef(self, prop_name, prop, ref):
-    self.prop_stack[-1] = gapi_utils.WrapType('std::shared_ptr<%s>', ref)
-  def BeginPropertyType(self, prop_name, prop):
-    pass
-  def EndPropertyType(self, prop_name, prop):
-    pass
+    self.prop_stack[-1] = gapi_utils.WrapType('std::tr1::shared_ptr<%s>', ref)
+
   def OnPropertyTypeFormat(self, prop_name, prop, prop_type, prop_format):
     self.prop_stack[-1] = TYPE_DICT[(prop_type, prop_format)]
-  def BeginPropertyTypeArray(self, prop_name, prop, prop_items):
-    pass
+
   def EndPropertyTypeArray(self, prop_name, prop, prop_items):
     item_type = self.prop_stack[-1]
     self.prop_stack[-1] = gapi_utils.WrapType('std::vector<%s>', item_type)
+
   def BeginPropertyTypeObject(self, prop_name, prop):
     return gapi_utils.CapWords(prop_name + 'Object')
+
   def EndPropertyTypeObject(self, prop_name, prop, schema_name):
     self.prop_stack[-1] = schema_name
+
+
+SOURCE_HEAD = """\
+#include "{header}"
+#include <stdlib.h>
+#include <string.h>
+#include <vector>
+#include "json_parser.h"
+
+"""
+
+SOURCE_FOOT = """\
+"""
+
+class CSourceService(Service):
+  def __init__(self, service):
+    self.f = cStringIO.StringIO()
+    self.states = set()
+    self.null_states = []
+    self.bool_states = []
+    self.number_states = []
+    self.string_states = []
+    self.map_states = []
+    self.array_states = []
+    self.state_stack = []
+
+    self.schema_level = 0
+    super(CHeaderService, self).__init__(service)
+
+  @property
+  def state(self):
+    if self.states:
+      return self.states[-1]
+    return 'STATE_TOP'
+
+  def BeginService(self, name, version):
+    pass
+
+  def EndService(self, name, version):
+    with open('out/%s_%s.cc' % (name, version), 'w') as outf:
+      header = '%s_%s.h' % (name, version)
+      outf.write(SOURCE_HEAD.format(**vars()))
+      outf.write(self.f.getvalue())
+      outf.write(SOURCE_FOOT.format(**vars()))
+
+  def BeginSchema(self, schema_name, schema):
+    self.schema_level += 1
+    if self.schema_level == 1:
+      state_prefix = 'STATE_'
+    else:
+      state_prefix = self.state + '_'
+    state = state_prefix + gapi_utils.Upper(schema_name)
+    self.states.add(state)
+    self.state_stack.append(state)
+
+  def EndSchema(self, schema_name, schema):
+    self.state_stack.pop()
+    self.schema_level -= 1
+    if not self.schema_level:
+      # Process top-level schema
+      pass
+
+  def BeginProperty(self, prop_name, prop):
+    state = self.state + '_' + gapi_utils.Upper(prop_name)
+    self.states.add(state)
+    self.state_stack.append(state)
+
+  def EndProperty(self, prop_name, prop):
+    self.state_stack.pop()
+
+  def OnPropertyTypeRef(self, prop_name, prop, ref):
+    pass
+
+  def OnPropertyTypeFormat(self, prop_name, prop, prop_type, prop_format):
+    pass
+
+  def BeginPropertyTypeArray(self, prop_name, prop, prop_items):
+    state = self.state + '_ARRAY'
+    self.states.add(state)
+    self.state_stack.append(state)
+
+  def EndPropertyTypeArray(self, prop_name, prop, prop_items):
+    self.state_stack.pop()
+
+  def BeginPropertyTypeObject(self, prop_name, prop):
+    state = self.state + '_OBJECT'
+    self.states.add(state)
+    self.state_stack.append(state)
+
+  def EndPropertyTypeObject(self, prop_name, prop, schema_name):
+    self.state_stack.pop()
 
 
 def ReadCachedJson(url, filename):
@@ -193,6 +316,7 @@ def main(args):
     json_name = '%s_%s.json' % (item['name'], item['version'])
     service = ReadCachedJson(item['discoveryRestUrl'], json_name)
     CHeaderService(service)
+    CSourceService(service)
 
 
 if __name__ == '__main__':

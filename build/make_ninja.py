@@ -97,6 +97,8 @@ YAJL_SOURCE_FILES = [
 ]
 SOURCE_FILES = [
   'src/gapi.cc',
+  'src/json_parser.cc',
+  'src/urlshortener_v1.cc',
 ]
 
 DATA_FILES = [
@@ -259,7 +261,7 @@ def Code(w):
 #  w.variable('base_ccflags', '-g')
 #  w.variable('base_cxxflags', '-g -std=c++0x')
   w.variable('base_ccflags', '-g -std=c99 -O3')
-  w.variable('base_cxxflags', '-g -std=c++0x -O3')
+  w.variable('base_cxxflags', '-g -O3')
 
   # Copy yajl headers
   yajl_headers = []
