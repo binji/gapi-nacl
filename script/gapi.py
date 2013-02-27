@@ -1,5 +1,7 @@
 #!/usr/bin/env python
+import collections
 import cStringIO
+import easy_template
 import json
 import os
 import re
@@ -9,7 +11,7 @@ import urllib2
 import gapi_utils
 
 DISCOVERY_API = 'https://www.googleapis.com/discovery/v1/apis'
-API_JSON = 'api.json'
+API_JSON = 'out/api.json'
 
 TYPE_DICT = {
   ('any', ''): 'std::string',
@@ -129,20 +131,22 @@ class Service(object):
 
 
 HEADER_HEAD = """\
-#ifndef {include_guard}
-#define {include_guard}
+#ifndef {{include_guard}}
+#define {{include_guard}}
 
 #include <map>
 #include <tr1/memory>
 #include <vector>
 #include <string>
 
-{forward_dec}
+[[for schema in self.toplevel_schemas:]]
+struct {{schema}};
+[[]]
 
 """
 
 HEADER_FOOT = """\
-#endif  // {include_guard}
+#endif  // {{include_guard}}
 """
 
 class CHeaderService(Service):
@@ -157,10 +161,9 @@ class CHeaderService(Service):
   def EndService(self, name, version):
     with open('out/%s_%s.h' % (name, version), 'w') as outf:
       include_guard = gapi_utils.MakeIncludeGuard(name, version)
-      forward_dec = '\n'.join('struct %s;' % x for x in self.toplevel_schemas)
-      outf.write(HEADER_HEAD.format(**vars()))
+      outf.write(easy_template.RunTemplateString(HEADER_HEAD, vars()))
       outf.write(self.f.getvalue())
-      outf.write(HEADER_FOOT.format(**vars()))
+      outf.write(easy_template.RunTemplateString(HEADER_FOOT, vars()))
 
   def BeginSchema(self, schema_name, schema):
     if not self.schema_stack:
@@ -207,7 +210,7 @@ class CHeaderService(Service):
 
 
 SOURCE_HEAD = """\
-#include "{header}"
+#include "{{header}}"
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
@@ -218,26 +221,153 @@ SOURCE_HEAD = """\
 SOURCE_FOOT = """\
 """
 
+SOURCE_SCHEMA = """\
+class {{schema_name}}Callbacks : public JsonCallbacks {
+ public:
+  enum {
+    STATE_NONE,
+    STATE_TOP,
+[[for state in sorted(self.schema.states):]]
+    {{state}},
+[[]]
+  };
+
+  explicit {{schema_name}}Callbacks({{schema_name}}* data);
+  virtual int OnNull(JsonParser* p);
+  virtual int OnBool(JsonParser* p, bool value);
+  virtual int OnNumber(JsonParser* p, const char* s, size_t length);
+  virtual int OnString(JsonParser* p, const unsigned char* s, size_t length);
+  virtual int OnStartMap(JsonParser* p);
+  virtual int OnMapKey(JsonParser* p, const unsigned char* s, size_t length);
+  virtual int OnEndMap(JsonParser* p);
+  virtual int OnStartArray(JsonParser* p);
+  virtual int OnEndArray(JsonParser* p);
+
+ private:
+  {{schema_name}}* data_;
+};
+
+{{schema_name}}Callbacks::{{schema_name}}Callbacks({{schema_name}}* data)
+    : data_(data) {
+}
+
+int {{schema_name}}Callbacks::OnNull(JsonParser* p) {
+  return 0;  // fail
+}
+
+int {{schema_name}}Callbacks::OnBool(JsonParser* p, bool value) {
+  return 0;  // fail
+}
+
+int {{schema_name}}Callbacks::OnNumber(JsonParser* p, const char* s, size_t length) {
+  char* endptr;
+  char buffer[32];
+  strncpy(&buffer[0], s, length);
+  switch (top()) {
+[[for state, props in self.schema.number_states.iteritems():]]
+    case {{state}}:
+[[  for prop_name, ctype in props:]]
+      {{prop_name}} {{ctype}}
+[[]]
+    default:
+      return 0;
+  }
+}
+
+int {{schema_name}}Callbacks::OnString(JsonParser* p, const unsigned char* s, size_t length) {
+  return 0;  // fail
+}
+
+int {{schema_name}}Callbacks::OnStartMap(JsonParser* p) {
+  return 0;  // fail
+}
+
+int {{schema_name}}Callbacks::OnMapKey(JsonParser* p, const unsigned char* s, size_t length) {
+  if (length == 0) return 0;
+  switch (top()) {
+[[for state, props in self.schema.state_props.iteritems():]]
+    case {{state}}:
+      switch (s[0]) {
+[[  for prop_name, next_state in props:]]
+        case '{{prop_name[0]}}':
+          if (length != {{len(prop_name)}} ||
+              strncmp(reinterpret_cast<const char*>(s), "{{prop_name}}", {{len(prop_name)}}) != 0)
+            return 0;
+          Push({{next_state}});
+          return 1;
+[[  ]]
+        default:
+          return 0;
+      }
+[[]]
+    default:
+      return 0;
+  }
+}
+
+int {{schema_name}}Callbacks::OnEndMap(JsonParser* p) {
+  return 0;  // fail
+}
+
+int {{schema_name}}Callbacks::OnStartArray(JsonParser* p) {
+  return 0;  // fail
+}
+
+int {{schema_name}}Callbacks::OnEndArray(JsonParser* p) {
+  return 0;  // fail
+}
+
+"""
+
+
+class SchemaInfo(object):
+  def __init__(self):
+    self.states = set()
+    self.null_states = collections.defaultdict(list)
+    self.bool_states = collections.defaultdict(list)
+    self.number_states = collections.defaultdict(list)
+    self.string_states = collections.defaultdict(list)
+    self.map_states = collections.defaultdict(list)
+    self.array_states = collections.defaultdict(list)
+    self.state_props = collections.defaultdict(list)
+
+
 class CSourceService(Service):
   def __init__(self, service):
     self.f = cStringIO.StringIO()
-    self.states = set()
-    self.null_states = []
-    self.bool_states = []
-    self.number_states = []
-    self.string_states = []
-    self.map_states = []
-    self.array_states = []
     self.state_stack = []
+    self.schema = SchemaInfo()
 
     self.schema_level = 0
-    super(CHeaderService, self).__init__(service)
+    super(CSourceService, self).__init__(service)
 
   @property
   def state(self):
-    if self.states:
-      return self.states[-1]
+    if self.state_stack:
+      return self.state_stack[-1]
     return 'STATE_TOP'
+
+  def PushState(self, state):
+    current_state = self.state
+    # strip _K if it exists
+    if current_state.endswith('_K'):
+      current_state = current_state[:-2]
+    if current_state == 'STATE_TOP':
+      new_state = 'STATE_%s_K' % state
+    elif state == 'array':
+      new_state = '%s_A' % current_state
+    elif state == 'object':
+      if current_state.endswith('_A'):
+        new_state = '%s_AO' % current_state[:-2]
+      else:
+        new_state = '%s_O' % current_state
+    else:
+      new_state = '%s_%s_K' % (current_state, state)
+    self.schema.states.add(new_state)
+    self.state_stack.append(new_state)
+
+  def PopState(self):
+    self.state_stack.pop()
 
   def BeginService(self, name, version):
     pass
@@ -245,56 +375,56 @@ class CSourceService(Service):
   def EndService(self, name, version):
     with open('out/%s_%s.cc' % (name, version), 'w') as outf:
       header = '%s_%s.h' % (name, version)
-      outf.write(SOURCE_HEAD.format(**vars()))
+      outf.write(easy_template.RunTemplateString(SOURCE_HEAD, vars()))
       outf.write(self.f.getvalue())
-      outf.write(SOURCE_FOOT.format(**vars()))
+      outf.write(easy_template.RunTemplateString(SOURCE_FOOT, vars()))
 
   def BeginSchema(self, schema_name, schema):
     self.schema_level += 1
-    if self.schema_level == 1:
-      state_prefix = 'STATE_'
-    else:
-      state_prefix = self.state + '_'
-    state = state_prefix + gapi_utils.Upper(schema_name)
-    self.states.add(state)
-    self.state_stack.append(state)
 
   def EndSchema(self, schema_name, schema):
-    self.state_stack.pop()
     self.schema_level -= 1
     if not self.schema_level:
       # Process top-level schema
-      pass
+      self.f.write(easy_template.RunTemplateString(SOURCE_SCHEMA, vars()))
+      # Reset schema info
+      self.schema = SchemaInfo()
 
   def BeginProperty(self, prop_name, prop):
-    state = self.state + '_' + gapi_utils.Upper(prop_name)
-    self.states.add(state)
-    self.state_stack.append(state)
+    current_state = self.state
+    self.PushState(gapi_utils.Upper(prop_name))
+    next_state = self.state
+    self.schema.state_props[current_state].append((prop_name, next_state))
 
   def EndProperty(self, prop_name, prop):
-    self.state_stack.pop()
+    self.PopState()
 
   def OnPropertyTypeRef(self, prop_name, prop, ref):
     pass
 
   def OnPropertyTypeFormat(self, prop_name, prop, prop_type, prop_format):
-    pass
+    # TODO(binji): handle any
+    ctype = TYPE_DICT[(prop_type, prop_format)]
+    if prop_type in ['number', 'integer'] or \
+        (prop_type == 'string' and 'int' in prop_format):
+      # Number
+      self.schema.number_states[self.state].append((prop_name, ctype))
+    elif prop_type == 'boolean':
+      self.schema.bool_states[self.state].append((prop_name, ctype))
+    elif prop_type == 'string':
+      self.schema.string_states[self.state].append((prop_name, ctype))
 
   def BeginPropertyTypeArray(self, prop_name, prop, prop_items):
-    state = self.state + '_ARRAY'
-    self.states.add(state)
-    self.state_stack.append(state)
+    self.PushState('array')
 
   def EndPropertyTypeArray(self, prop_name, prop, prop_items):
-    self.state_stack.pop()
+    self.PopState()
 
   def BeginPropertyTypeObject(self, prop_name, prop):
-    state = self.state + '_OBJECT'
-    self.states.add(state)
-    self.state_stack.append(state)
+    self.PushState('object')
 
   def EndPropertyTypeObject(self, prop_name, prop, schema_name):
-    self.state_stack.pop()
+    self.PopState()
 
 
 def ReadCachedJson(url, filename):
@@ -313,7 +443,7 @@ def ReadCachedJson(url, filename):
 def main(args):
   d = ReadCachedJson(DISCOVERY_API, API_JSON)
   for item in d['items']:
-    json_name = '%s_%s.json' % (item['name'], item['version'])
+    json_name = 'out/%s_%s.json' % (item['name'], item['version'])
     service = ReadCachedJson(item['discoveryRestUrl'], json_name)
     CHeaderService(service)
     CSourceService(service)
