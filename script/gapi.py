@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 import collections
+import copy
 import cStringIO
-import easy_template
+import itertools
 import json
 import os
 import re
 import sys
 import urllib2
 
+import easy_template
 import gapi_utils
 
 DISCOVERY_API = 'https://www.googleapis.com/discovery/v1/apis'
@@ -256,45 +258,136 @@ int {{schema_name}}Callbacks::OnNull(JsonParser* p) {
 }
 
 int {{schema_name}}Callbacks::OnBool(JsonParser* p, bool value) {
-  return 0;  // fail
+  switch (top()) {
+[[if self.schema.bool_states:]]
+[[  for state, props in sorted(self.schema.bool_states.iteritems()):]]
+[[    assert(len(props) == 1)]]
+[[    cident = props[0][0] ]]
+[[    ctype = props[0][1] ]]
+[[    is_array = props[0][2] ]]
+    case {{state}}:
+[[    if is_array:]]
+      APPEND_BOOL_AND_RETURN({{cident}});
+[[    else:]]
+      SET_BOOL_AND_RETURN({{cident}});
+[[  ]]
+    default:
+      return 0;
+  }
+[[else:]]
+  return 0;
+[[]]
 }
 
 int {{schema_name}}Callbacks::OnNumber(JsonParser* p, const char* s, size_t length) {
+[[if self.schema.number_states:]]
   char* endptr;
   char buffer[32];
   strncpy(&buffer[0], s, length);
   switch (top()) {
-[[for state, props in self.schema.number_states.iteritems():]]
+[[  for state, props in sorted(self.schema.number_states.iteritems()):]]
+[[    assert(len(props) == 1)]]
+[[    cident = props[0][0] ]]
+[[    ctype = props[0][1] ]]
+[[    is_array = props[0][2] ]]
+[[    prefix = 'APPEND' if is_array else 'SET']]
+[[    if ctype == "int32_t":]]
     case {{state}}:
-[[  for prop_name, ctype in props:]]
-      {{prop_name}} {{ctype}}
-[[]]
+      {{prefix}}_INT32_AND_RETURN({{cident}});
+[[    elif ctype == "uint32_t":]]
+    case {{state}}:
+      {{prefix}}_UINT32_AND_RETURN({{cident}});
+[[    elif ctype == "int64_t":]]
+    case {{state}}:
+      {{prefix}}_INT64_AND_RETURN({{cident}});
+[[    elif ctype == "uint64_t":]]
+    case {{state}}:
+      {{prefix}}_UINT64_AND_RETURN({{cident}});
+[[    elif ctype == "float":]]
+    case {{state}}:
+      {{prefix}}_FLOAT_AND_RETURN({{cident}});
+[[    elif ctype == "double":]]
+    case {{state}}:
+      {{prefix}}_DOUBLE_AND_RETURN({{cident}});
+[[  ]]
     default:
       return 0;
   }
+[[else:]]
+  return 0;
+[[]]
 }
 
 int {{schema_name}}Callbacks::OnString(JsonParser* p, const unsigned char* s, size_t length) {
-  return 0;  // fail
+  switch (top()) {
+[[if self.schema.string_states:]]
+[[  for state, props in sorted(self.schema.string_states.iteritems()):]]
+[[    assert(len(props) == 1)]]
+[[    cident = props[0][0] ]]
+[[    ctype = props[0][1] ]]
+[[    is_array = props[0][2] ]]
+    case {{state}}:
+[[    if is_array:]]
+      APPEND_STRING_AND_RETURN({{cident}});
+[[    else:]]
+      SET_STRING_AND_RETURN({{cident}});
+[[  ]]
+    default:
+      return 0;
+  }
+[[else:]]
+  return 0;
+[[]]
 }
 
 int {{schema_name}}Callbacks::OnStartMap(JsonParser* p) {
+[[if self.schema.ref_states or self.schema.map_states:]]
+  switch (top()) {
+[[  for state, props in sorted(self.schema.ref_states.iteritems()):]]
+[[    assert(len(props) == 1)]]
+[[    cident = props[0][0] ]]
+[[    ctype = props[0][1] ]]
+[[    is_array = props[0][2] ]]
+    case {{state}}: {
+[[    if is_array:]]
+      {{ctype}}* instance = new {{ctype}}();
+      data->{{cident}}.push_back(std::tr1::shared_ptr<{{ctype}}>(instance));
+      p->PushCallbacks(new {{ctype}}Callbacks(instance));
+[[    else:]]
+      {{ctype}}* instance = new {{ctype}}();
+      data->{{cident}}.reset(instance);
+      p->PushCallbacks(new {{ctype}}Callbacks(instance));
+[[    ]]
+    }
+[[  ]]
+[[  for state, next_states in sorted(self.schema.map_states.iteritems()):]]
+[[    assert(len(next_states) == 1)]]
+    case {{state}}:
+      PushState({{next_states[0]}});
+      return 1;
+[[  ]]
+    default:
+      return 0;
+  }
+[[else:]]
   return 0;  // fail
+[[]]
 }
 
 int {{schema_name}}Callbacks::OnMapKey(JsonParser* p, const unsigned char* s, size_t length) {
   if (length == 0) return 0;
   switch (top()) {
-[[for state, props in self.schema.state_props.iteritems():]]
+[[for state, props in sorted(self.schema.state_props.iteritems()):]]
     case {{state}}:
       switch (s[0]) {
-[[  for prop_name, next_state in props:]]
-        case '{{prop_name[0]}}':
-          if (length != {{len(prop_name)}} ||
-              strncmp(reinterpret_cast<const char*>(s), "{{prop_name}}", {{len(prop_name)}}) != 0)
-            return 0;
-          Push({{next_state}});
-          return 1;
+[[  for first_char, group in itertools.groupby(sorted(props), lambda p:p[0][0]):]]
+        case '{{first_char}}':
+[[    # Sort group in reverse order of name length.]]
+[[    group = sorted(group, lambda x,y: cmp(len(y[0]), len(x[0])))]]
+[[    for prop_name, next_state in group:]]
+          CHECK_MAP_KEY("{{prop_name}}", {{next_state}});
+[[    ]]
+          return 0;
 [[  ]]
         default:
           return 0;
@@ -306,15 +399,35 @@ int {{schema_name}}Callbacks::OnMapKey(JsonParser* p, const unsigned char* s, si
 }
 
 int {{schema_name}}Callbacks::OnEndMap(JsonParser* p) {
-  return 0;  // fail
+  if (top() == STATE_TOP) {
+    if (!p->PopCallbacks())
+      return 0;
+  }
+
+  // Handle subobjects here...
 }
 
 int {{schema_name}}Callbacks::OnStartArray(JsonParser* p) {
+[[if self.schema.array_states:]]
+  switch (top()) {
+[[  for state, next_states in self.schema.array_states.iteritems():]]
+[[    assert(len(next_states) == 1)]]
+    case {{state}}:
+      PushState({{next_states[0]}});
+      return 1;
+[[  ]]
+    default:
+      return 0;
+  }
+[[else:]]
   return 0;  // fail
+[[]]
 }
 
 int {{schema_name}}Callbacks::OnEndArray(JsonParser* p) {
-  return 0;  // fail
+  if (top() == STATE_TOP) return 0;
+  PopState();
+  return 1;
 }
 
 """
@@ -327,6 +440,7 @@ class SchemaInfo(object):
     self.bool_states = collections.defaultdict(list)
     self.number_states = collections.defaultdict(list)
     self.string_states = collections.defaultdict(list)
+    self.ref_states = collections.defaultdict(list)
     self.map_states = collections.defaultdict(list)
     self.array_states = collections.defaultdict(list)
     self.state_props = collections.defaultdict(list)
@@ -386,7 +500,9 @@ class CSourceService(Service):
     self.schema_level -= 1
     if not self.schema_level:
       # Process top-level schema
-      self.f.write(easy_template.RunTemplateString(SOURCE_SCHEMA, vars()))
+      v = copy.copy(vars())
+      v.update({'itertools': itertools})
+      self.f.write(easy_template.RunTemplateString(SOURCE_SCHEMA, v))
       # Reset schema info
       self.schema = SchemaInfo()
 
@@ -400,28 +516,39 @@ class CSourceService(Service):
     self.PopState()
 
   def OnPropertyTypeRef(self, prop_name, prop, ref):
-    pass
+    cident = gapi_utils.SnakeCase(prop_name)
+    is_array = self.state.endswith('_A')
+    self.schema.ref_states[self.state].append((cident, ref, is_array))
 
   def OnPropertyTypeFormat(self, prop_name, prop, prop_type, prop_format):
     # TODO(binji): handle any
+    cident = gapi_utils.SnakeCase(prop_name)
     ctype = TYPE_DICT[(prop_type, prop_format)]
+    is_array = self.state.endswith('_A')
+    data = (cident, ctype, is_array)
     if prop_type in ['number', 'integer'] or \
         (prop_type == 'string' and 'int' in prop_format):
       # Number
-      self.schema.number_states[self.state].append((prop_name, ctype))
+      self.schema.number_states[self.state].append(data)
     elif prop_type == 'boolean':
-      self.schema.bool_states[self.state].append((prop_name, ctype))
+      self.schema.bool_states[self.state].append(data)
     elif prop_type == 'string':
-      self.schema.string_states[self.state].append((prop_name, ctype))
+      self.schema.string_states[self.state].append(data)
 
   def BeginPropertyTypeArray(self, prop_name, prop, prop_items):
+    current_state = self.state
     self.PushState('array')
+    next_state = self.state
+    self.schema.array_states[current_state].append(next_state)
 
   def EndPropertyTypeArray(self, prop_name, prop, prop_items):
     self.PopState()
 
   def BeginPropertyTypeObject(self, prop_name, prop):
+    current_state = self.state
     self.PushState('object')
+    next_state = self.state
+    self.schema.map_states[current_state].append(next_state)
 
   def EndPropertyTypeObject(self, prop_name, prop, schema_name):
     self.PopState()
