@@ -18,14 +18,6 @@ class JsonCallbacks {
   virtual int OnEndMap(JsonParser* p) = 0;
   virtual int OnStartArray(JsonParser* p) = 0;
   virtual int OnEndArray(JsonParser* p) = 0;
-
- protected:
-  int top() { return context_stack_.empty() ? 0 : context_stack_.back(); }
-  void Push(int state) { context_stack_.push_back(state); }
-  void Pop() { context_stack_.pop_back(); }
-
- private:
-  std::vector<int> context_stack_;
 };
 
 class JsonParser : public JsonCallbacks {
