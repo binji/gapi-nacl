@@ -145,10 +145,23 @@ HEADER_HEAD = """\
 struct {{schema}};
 [[]]
 
+[[for schema in self.toplevel_schemas:]]
+bool Decode(JsonParser* p, {{schema}}* out_data);
+[[]]
+
 """
 
 HEADER_FOOT = """\
 #endif  // {{include_guard}}
+"""
+
+HEADER_SCHEMA_HEAD = """\
+struct {{schema_name}} {
+"""
+
+HEADER_SCHEMA_FOOT = """\
+};
+
 """
 
 class CHeaderService(Service):
@@ -171,13 +184,15 @@ class CHeaderService(Service):
     if not self.schema_stack:
       self.toplevel_schemas.append(schema_name)
     self.schema_stack.append(schema_name)
-    self.f.write('%sstruct %s {\n' % (self.indent, schema_name))
+    self.f.write(RunTemplateString(HEADER_SCHEMA_HEAD, vars(),
+                                   output_indent=self.indent))
     self.indent += '  '
 
   def EndSchema(self, schema_name, schema):
     WriteJsonComment(self.f, schema, self.indent, 80)
     self.indent = self.indent[:-2]
-    self.f.write('%s};\n\n' % (self.indent,))
+    self.f.write(RunTemplateString(HEADER_SCHEMA_FOOT, vars(),
+                                   output_indent=self.indent))
     self.schema_stack.pop()
 
   def BeginProperty(self, prop_name, prop):
@@ -261,6 +276,12 @@ class {{sub_schema.cbtype}} : public JsonCallbacks {
 """
 
 SOURCE_SCHEMA_DEF = """\
+
+bool Decode(JsonParser* p, {{sub_schema.ctype}}* out_data) {
+  p->PushCallbacks(new {{sub_schema.cbtype}}(out_data));
+  p->Decode();
+}
+
 {{sub_schema.cbtype}}::{{sub_schema.base_cbtype}}({{sub_schema.ctype}}* data)
     : data_(data) {
 }

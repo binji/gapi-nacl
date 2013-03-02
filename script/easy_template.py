@@ -13,7 +13,7 @@ import sys
 STATEMENT_RE = "\[\[(.*?)\]\]"  # [[...]]
 EXPR_RE = "\{\{(.*?)\}\}"  # {{...}}
 
-def TemplateToPython(template, statement_re, expr_re):
+def TemplateToPython(template, statement_re, expr_re, output_indent):
   output = cStringIO.StringIO()
   indent_re = re.compile(r'\s*')
   indent_string = ''
@@ -34,11 +34,12 @@ def TemplateToPython(template, statement_re, expr_re):
       m = expr_re.search(line)
       if m:
         line = line.replace('%', '%%')
-        subst_line = r'r"""%s""" %% (%s,)' % (
+        subst_line = r'r"""%s%s""" %% (%s,)' % (
+            output_indent,
             re.sub(expr_re, '%s', line),
             ', '.join(re.findall(expr_re, line)))
       else:
-        subst_line = r'r"""%s"""' % line
+        subst_line = r'r"""%s%s"""' % (output_indent, line)
 
       out_string = r'%s__outfile__.write(%s + %s)' % (
           indent_string,
@@ -49,26 +50,28 @@ def TemplateToPython(template, statement_re, expr_re):
   return output.getvalue()
 
 
-def RunTemplate(src, dst, template_dict, statement_re=None, expr_re=None):
+def RunTemplate(src, dst, template_dict, statement_re=None, expr_re=None,
+                output_indent=''):
   statement_re = statement_re or re.compile(STATEMENT_RE)
   expr_re = expr_re or re.compile(EXPR_RE)
-  script = TemplateToPython(src.read(), statement_re, expr_re)
+  script = TemplateToPython(src.read(), statement_re, expr_re, output_indent)
   template_dict = copy.copy(template_dict)
   template_dict['__outfile__'] = dst
   exec script in template_dict
 
 
 def RunTemplateFile(srcfile, dstfile, template_dict, statement_re=None,
-                    expr_re=None):
+                    expr_re=None, output_indent=''):
   with open(srcfile) as src:
     with open(dstfile, 'w') as dst:
-      RunTemplate(src, dst, template_dict, statement_re, expr_re)
+      RunTemplate(src, dst, template_dict, statement_re, expr_re, output_indent)
 
 
-def RunTemplateString(src, template_dict, statement_re=None, expr_re=None):
+def RunTemplateString(src, template_dict, statement_re=None, expr_re=None,
+                      output_indent=''):
   srcf = cStringIO.StringIO(src)
   dstf = cStringIO.StringIO()
-  RunTemplate(srcf, dstf, template_dict, statement_re, expr_re)
+  RunTemplate(srcf, dstf, template_dict, statement_re, expr_re, output_indent)
   return dstf.getvalue()
 
 
