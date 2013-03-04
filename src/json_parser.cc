@@ -1,74 +1,46 @@
 #include "json_parser.h"
 
-namespace {
-
-class YajlError : public Error {
- public:
-  YajlError(yajl_handle handle);
-  virtual std::string ToString() const;
-
- private:
-  std::string message_;
-};
-
-YajlError::YajlError(yajl_handle handle) {
-}
-
-std::string YajlError::ToString() const {
-}
-
-
-}  // namespace
-
-MessageError::MessageError(const char* message)
-    : message_(message) {
-}
-
-std::string MessageError::ToString() const {
-  return message_;
-}
-
 JsonParser::JsonParser() {
   // NULL => use the default alloc funcs (malloc, realloc, free).
-  handle_ = yajl_alloc(s_callbacks, NULL, this);
+  handle_ = yajl_alloc(&s_callbacks, NULL, this);
 }
 
 JsonParser::~JsonParser() {
   yajl_free(handle_);
 }
 
-size_t JsonParser::Write(const void* buf, size_t count, Error** error) {
+size_t JsonParser::Write(const void* buf, size_t count, ErrorPtr* error) {
   yajl_status status =
       yajl_parse(handle_, reinterpret_cast<const unsigned char*>(buf), count);
   SetErrorFromStatus(error, status);
   return yajl_get_bytes_consumed(handle_);
 }
 
-bool JsonParser::Flush(Error** error) {
+bool JsonParser::Close(ErrorPtr* error) {
   yajl_status status = yajl_complete_parse(handle_);
   SetErrorFromStatus(error, status);
   return yajl_status_ok;
 }
 
-void JsonParser::SetErrorFromStatus(Error** error, yajl_status status) {
+void JsonParser::SetErrorFromStatus(ErrorPtr* error, yajl_status status) {
   if (!error)
     return;
 
   switch (status) {
     case yajl_status_ok:
-      *error = NULL;
+      error->reset();
       break;
 
-    case yajl_status_client_cancelled:
-      *error = new MessageError("Client cancelled.");
+    case yajl_status_client_canceled:
+      error->reset(new MessageError("Client canceled."));
       break;
 
     case yajl_status_error:
-      *error = new YajlError(handle_);
+      error->reset(new YajlError(handle_));
       break;
 
     default:
-      *error = new MessageError("Unknown YAJL status.");
+      error->reset(new MessageError("Unknown YAJL status."));
       break;
   }
 }

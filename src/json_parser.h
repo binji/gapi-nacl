@@ -4,37 +4,9 @@
 #include <assert.h>
 #include <string>
 #include <vector>
+#include "error.h"
+#include "io.h"
 #include "yajl/yajl_parse.h"
-#include "reader.h"
-
-class Error {
- public:
-  virtual ~Error() {}
-  virtual std::string ToString() const = 0;
-};
-
-class MessageError : public Error {
- public:
-  virtual MessageError(const char* message);
-  virtual std::string ToString() const;
-
- private:
-  std::string message_;
-};
-
-class Reader {
- public:
-  virtual ~Reader() {}
-  virtual size_t Read(void* buf, size_t count, Error** error) = 0;
-};
-
-class Writer {
- public:
-  virtual ~Writer() {}
-  virtual size_t Write(const void* buf, size_t count, Error** error) = 0;
-  virtual bool Flush(Error** error) = 0;
-};
-
 
 class JsonParser;
 
@@ -52,19 +24,19 @@ class JsonCallbacks {
   virtual int OnEndArray(JsonParser* p) = 0;
 };
 
-class JsonParser : public JsonCallbacks, public Writer {
+class JsonParser : public JsonCallbacks, public Writer, public Closer {
  public:
   JsonParser();
   ~JsonParser();
 
-  virtual size_t Write(const void* buf, size_t count, Error* error);
-  virtual bool Flush(Error** error);
+  virtual size_t Write(const void* buf, size_t count, ErrorPtr* error);
+  virtual bool Close(ErrorPtr* error);
 
   void PushCallbacks(JsonCallbacks* callbacks);
   bool PopCallbacks();
 
  private:
-  void SetErrorFromStatus(Error** error, yajl_status status);
+  void SetErrorFromStatus(ErrorPtr* error, yajl_status status);
 
   virtual int OnNull(JsonParser* p);
   virtual int OnBool(JsonParser* p, bool value);

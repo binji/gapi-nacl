@@ -96,7 +96,9 @@ YAJL_SOURCE_FILES = [
   'third_party/yajl/src/yajl_version.c',
 ]
 SOURCE_FILES = [
+  'src/error.cc',
   'src/gapi.cc',
+  'src/io.cc',
   'src/json_parser.cc',
   'src/urlshortener_v1.cc',
 ]
