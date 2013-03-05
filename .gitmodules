@@ -1,3 +1,6 @@
 [submodule "third_party/yajl"]
 	path = third_party/yajl
 	url = https://github.com/lloyd/yajl
+[submodule "third_party/gtest"]
+	path = third_party/gtest
+	url = http://chromium.googlesource.com/chromium/testing/gtest
