@@ -9,20 +9,31 @@ JsonParser::~JsonParser() {
   yajl_free(handle_);
 }
 
+void JsonParser::Decode(Reader* src, ErrorPtr* out_error) {
+  ErrorPtr error;
+  Copy(this, src, &error);
+  if (error) {
+    if (out_error)
+      *out_error = error;
+    return;
+  }
+  Close(out_error);
+}
+
 size_t JsonParser::Write(const void* buf, size_t count, ErrorPtr* error) {
   yajl_status status =
-      yajl_parse(handle_, reinterpret_cast<const unsigned char*>(buf), count);
-  SetErrorFromStatus(error, status);
+      yajl_parse(handle_, static_cast<const unsigned char*>(buf), count);
+  SetErrorFromStatus(error, status, static_cast<const char*>(buf), count);
   return yajl_get_bytes_consumed(handle_);
 }
 
-bool JsonParser::Close(ErrorPtr* error) {
+void JsonParser::Close(ErrorPtr* error) {
   yajl_status status = yajl_complete_parse(handle_);
-  SetErrorFromStatus(error, status);
-  return yajl_status_ok;
+  SetErrorFromStatus(error, status, NULL, 0);
 }
 
-void JsonParser::SetErrorFromStatus(ErrorPtr* error, yajl_status status) {
+void JsonParser::SetErrorFromStatus(ErrorPtr* error, yajl_status status,
+                                    const char* text, size_t length) {
   if (!error)
     return;
 
@@ -36,7 +47,7 @@ void JsonParser::SetErrorFromStatus(ErrorPtr* error, yajl_status status) {
       break;
 
     case yajl_status_error:
-      error->reset(new YajlError(handle_));
+      error->reset(new YajlError(handle_, text, length));
       break;
 
     default:

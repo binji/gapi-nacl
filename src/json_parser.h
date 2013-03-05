@@ -29,14 +29,17 @@ class JsonParser : public JsonCallbacks, public Writer, public Closer {
   JsonParser();
   ~JsonParser();
 
+  void Decode(Reader* src, ErrorPtr* error);
+
   virtual size_t Write(const void* buf, size_t count, ErrorPtr* error);
-  virtual bool Close(ErrorPtr* error);
+  virtual void Close(ErrorPtr* error);
 
   void PushCallbacks(JsonCallbacks* callbacks);
   bool PopCallbacks();
 
  private:
-  void SetErrorFromStatus(ErrorPtr* error, yajl_status status);
+  void SetErrorFromStatus(ErrorPtr* error, yajl_status status,
+                          const char* text, size_t length);
 
   virtual int OnNull(JsonParser* p);
   virtual int OnBool(JsonParser* p, bool value);

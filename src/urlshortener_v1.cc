@@ -1,5 +1,6 @@
 #include "urlshortener_v1.h"
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
@@ -150,22 +151,38 @@ class UrlHistoryCallbacks : public JsonCallbacks {
   int state_;
 };
 
+
+void Decode(Reader* src, AnalyticsSnapshot* out_data, ErrorPtr* error) {
+  JsonParser p;
+  p.PushCallbacks(new AnalyticsSnapshotCallbacks(out_data));
+  p.Decode(src, error);
+}
+
 AnalyticsSnapshotCallbacks::AnalyticsSnapshotCallbacks(AnalyticsSnapshot* data)
-    : data_(data) {
+    : data_(data),
+      state_(STATE_NONE) {
 }
 
 int AnalyticsSnapshotCallbacks::OnNull(JsonParser* p) {
+  printf("AnalyticsSnapshotCallbacks::OnNull()\n");
   return 0;
 }
 
 int AnalyticsSnapshotCallbacks::OnBool(JsonParser* p, bool value) {
+  printf("AnalyticsSnapshotCallbacks::OnBool(%d) %d\n", value, state_);
   return 0;
 }
 
 int AnalyticsSnapshotCallbacks::OnNumber(JsonParser* p, const char* s, size_t length) {
+  printf("AnalyticsSnapshotCallbacks::OnNumber(%.*s) %d\n", length, s, state_);
+  return 0;
+}
+
+int AnalyticsSnapshotCallbacks::OnString(JsonParser* p, const unsigned char* s, size_t length) {
+  printf("AnalyticsSnapshotCallbacks::OnString(%.*s) %d\n", length, s, state_);
   char* endptr;
   char buffer[32];
-  strncpy(&buffer[0], s, length);
+  strncpy(&buffer[0], reinterpret_cast<const char*>(s), length);
   switch (state_) {
     case STATE_LONGURLCLICKS_K:
       SET_INT64_AND_RETURN(long_url_clicks);
@@ -176,34 +193,27 @@ int AnalyticsSnapshotCallbacks::OnNumber(JsonParser* p, const char* s, size_t le
   }
 }
 
-int AnalyticsSnapshotCallbacks::OnString(JsonParser* p, const unsigned char* s, size_t length) {
-  return 0;
-}
-
 int AnalyticsSnapshotCallbacks::OnStartMap(JsonParser* p) {
+  printf("AnalyticsSnapshotCallbacks::OnStartMap() %d\n", state_);
   switch (state_) {
-    case STATE_BROWSERS_A: {
-      PUSH_CALLBACK_REF_ARRAY(StringCount, browsers);
+    case STATE_NONE:
+      state_ = STATE_TOP;
       return 1;
-    }
-    case STATE_COUNTRIES_A: {
-      PUSH_CALLBACK_REF_ARRAY(StringCount, countries);
-      return 1;
-    }
-    case STATE_PLATFORMS_A: {
-      PUSH_CALLBACK_REF_ARRAY(StringCount, platforms);
-      return 1;
-    }
-    case STATE_REFERRERS_A: {
-      PUSH_CALLBACK_REF_ARRAY(StringCount, referrers);
-      return 1;
-    }
+    case STATE_BROWSERS_A:
+      PUSH_CALLBACK_REF_ARRAY_AND_RETURN(StringCount, browsers);
+    case STATE_COUNTRIES_A:
+      PUSH_CALLBACK_REF_ARRAY_AND_RETURN(StringCount, countries);
+    case STATE_PLATFORMS_A:
+      PUSH_CALLBACK_REF_ARRAY_AND_RETURN(StringCount, platforms);
+    case STATE_REFERRERS_A:
+      PUSH_CALLBACK_REF_ARRAY_AND_RETURN(StringCount, referrers);
     default:
       return 0;
   }
 }
 
 int AnalyticsSnapshotCallbacks::OnMapKey(JsonParser* p, const unsigned char* s, size_t length) {
+  printf("AnalyticsSnapshotCallbacks::OnMapKey(%.*s) %d\n", length, s, state_);
   if (length == 0) return 0;
   switch (s[0]) {
     case 'b':
@@ -230,12 +240,12 @@ int AnalyticsSnapshotCallbacks::OnMapKey(JsonParser* p, const unsigned char* s, 
 }
 
 int AnalyticsSnapshotCallbacks::OnEndMap(JsonParser* p) {
-  if (state_ != STATE_TOP)
-    return 0;
+  printf("AnalyticsSnapshotCallbacks::OnEndMap() %d\n", state_);
   return p->PopCallbacks() ? 1 : 0;
 }
 
 int AnalyticsSnapshotCallbacks::OnStartArray(JsonParser* p) {
+  printf("AnalyticsSnapshotCallbacks::OnStartArray() %d\n", state_);
   switch (state_) {
     case STATE_REFERRERS_K:
       state_ = STATE_REFERRERS_A;
@@ -255,6 +265,7 @@ int AnalyticsSnapshotCallbacks::OnStartArray(JsonParser* p) {
 }
 
 int AnalyticsSnapshotCallbacks::OnEndArray(JsonParser* p) {
+  printf("AnalyticsSnapshotCallbacks::OnEndArray() %d\n", state_);
   switch (state_) {
     case STATE_REFERRERS_A:
       state_ = STATE_TOP;
@@ -273,54 +284,61 @@ int AnalyticsSnapshotCallbacks::OnEndArray(JsonParser* p) {
   }
 }
 
+
+void Decode(Reader* src, AnalyticsSummary* out_data, ErrorPtr* error) {
+  JsonParser p;
+  p.PushCallbacks(new AnalyticsSummaryCallbacks(out_data));
+  p.Decode(src, error);
+}
+
 AnalyticsSummaryCallbacks::AnalyticsSummaryCallbacks(AnalyticsSummary* data)
-    : data_(data) {
+    : data_(data),
+      state_(STATE_NONE) {
 }
 
 int AnalyticsSummaryCallbacks::OnNull(JsonParser* p) {
+  printf("AnalyticsSummaryCallbacks::OnNull()\n");
   return 0;
 }
 
 int AnalyticsSummaryCallbacks::OnBool(JsonParser* p, bool value) {
+  printf("AnalyticsSummaryCallbacks::OnBool(%d) %d\n", value, state_);
   return 0;
 }
 
 int AnalyticsSummaryCallbacks::OnNumber(JsonParser* p, const char* s, size_t length) {
+  printf("AnalyticsSummaryCallbacks::OnNumber(%.*s) %d\n", length, s, state_);
   return 0;
 }
 
 int AnalyticsSummaryCallbacks::OnString(JsonParser* p, const unsigned char* s, size_t length) {
+  printf("AnalyticsSummaryCallbacks::OnString(%.*s) %d\n", length, s, state_);
   return 0;
 }
 
 int AnalyticsSummaryCallbacks::OnStartMap(JsonParser* p) {
+  printf("AnalyticsSummaryCallbacks::OnStartMap() %d\n", state_);
   switch (state_) {
-    case STATE_ALLTIME_K: {
-      PUSH_CALLBACK_REF(AnalyticsSnapshot, all_time);
+    case STATE_NONE:
+      state_ = STATE_TOP;
       return 1;
-    }
-    case STATE_DAY_K: {
-      PUSH_CALLBACK_REF(AnalyticsSnapshot, day);
-      return 1;
-    }
-    case STATE_MONTH_K: {
-      PUSH_CALLBACK_REF(AnalyticsSnapshot, month);
-      return 1;
-    }
-    case STATE_TWOHOURS_K: {
-      PUSH_CALLBACK_REF(AnalyticsSnapshot, two_hours);
-      return 1;
-    }
-    case STATE_WEEK_K: {
-      PUSH_CALLBACK_REF(AnalyticsSnapshot, week);
-      return 1;
-    }
+    case STATE_ALLTIME_K:
+      PUSH_CALLBACK_REF_AND_RETURN(AnalyticsSnapshot, all_time);
+    case STATE_DAY_K:
+      PUSH_CALLBACK_REF_AND_RETURN(AnalyticsSnapshot, day);
+    case STATE_MONTH_K:
+      PUSH_CALLBACK_REF_AND_RETURN(AnalyticsSnapshot, month);
+    case STATE_TWOHOURS_K:
+      PUSH_CALLBACK_REF_AND_RETURN(AnalyticsSnapshot, two_hours);
+    case STATE_WEEK_K:
+      PUSH_CALLBACK_REF_AND_RETURN(AnalyticsSnapshot, week);
     default:
       return 0;
   }
 }
 
 int AnalyticsSummaryCallbacks::OnMapKey(JsonParser* p, const unsigned char* s, size_t length) {
+  printf("AnalyticsSummaryCallbacks::OnMapKey(%.*s) %d\n", length, s, state_);
   if (length == 0) return 0;
   switch (s[0]) {
     case 'a':
@@ -344,45 +362,55 @@ int AnalyticsSummaryCallbacks::OnMapKey(JsonParser* p, const unsigned char* s, s
 }
 
 int AnalyticsSummaryCallbacks::OnEndMap(JsonParser* p) {
-  if (state_ != STATE_TOP)
-    return 0;
+  printf("AnalyticsSummaryCallbacks::OnEndMap() %d\n", state_);
   return p->PopCallbacks() ? 1 : 0;
 }
 
 int AnalyticsSummaryCallbacks::OnStartArray(JsonParser* p) {
+  printf("AnalyticsSummaryCallbacks::OnStartArray() %d\n", state_);
   return 0;
 }
 
 int AnalyticsSummaryCallbacks::OnEndArray(JsonParser* p) {
+  printf("AnalyticsSummaryCallbacks::OnEndArray() %d\n", state_);
   return 0;
 }
 
+
+void Decode(Reader* src, StringCount* out_data, ErrorPtr* error) {
+  JsonParser p;
+  p.PushCallbacks(new StringCountCallbacks(out_data));
+  p.Decode(src, error);
+}
+
 StringCountCallbacks::StringCountCallbacks(StringCount* data)
-    : data_(data) {
+    : data_(data),
+      state_(STATE_NONE) {
 }
 
 int StringCountCallbacks::OnNull(JsonParser* p) {
+  printf("StringCountCallbacks::OnNull()\n");
   return 0;
 }
 
 int StringCountCallbacks::OnBool(JsonParser* p, bool value) {
+  printf("StringCountCallbacks::OnBool(%d) %d\n", value, state_);
   return 0;
 }
 
 int StringCountCallbacks::OnNumber(JsonParser* p, const char* s, size_t length) {
-  char* endptr;
-  char buffer[32];
-  strncpy(&buffer[0], s, length);
-  switch (state_) {
-    case STATE_COUNT_K:
-      SET_INT64_AND_RETURN(count);
-    default:
-      return 0;
-  }
+  printf("StringCountCallbacks::OnNumber(%.*s) %d\n", length, s, state_);
+  return 0;
 }
 
 int StringCountCallbacks::OnString(JsonParser* p, const unsigned char* s, size_t length) {
+  printf("StringCountCallbacks::OnString(%.*s) %d\n", length, s, state_);
+  char* endptr;
+  char buffer[32];
+  strncpy(&buffer[0], reinterpret_cast<const char*>(s), length);
   switch (state_) {
+    case STATE_COUNT_K:
+      SET_INT64_AND_RETURN(count);
     case STATE_ID_K:
       SET_STRING_AND_RETURN(id);
     default:
@@ -391,10 +419,18 @@ int StringCountCallbacks::OnString(JsonParser* p, const unsigned char* s, size_t
 }
 
 int StringCountCallbacks::OnStartMap(JsonParser* p) {
-  return 0;
+  printf("StringCountCallbacks::OnStartMap() %d\n", state_);
+  switch (state_) {
+    case STATE_NONE:
+      state_ = STATE_TOP;
+      return 1;
+    default:
+      return 0;
+  }
 }
 
 int StringCountCallbacks::OnMapKey(JsonParser* p, const unsigned char* s, size_t length) {
+  printf("StringCountCallbacks::OnMapKey(%.*s) %d\n", length, s, state_);
   if (length == 0) return 0;
   switch (s[0]) {
     case 'c':
@@ -409,36 +445,49 @@ int StringCountCallbacks::OnMapKey(JsonParser* p, const unsigned char* s, size_t
 }
 
 int StringCountCallbacks::OnEndMap(JsonParser* p) {
-  if (state_ != STATE_TOP)
-    return 0;
+  printf("StringCountCallbacks::OnEndMap() %d\n", state_);
   return p->PopCallbacks() ? 1 : 0;
 }
 
 int StringCountCallbacks::OnStartArray(JsonParser* p) {
+  printf("StringCountCallbacks::OnStartArray() %d\n", state_);
   return 0;
 }
 
 int StringCountCallbacks::OnEndArray(JsonParser* p) {
+  printf("StringCountCallbacks::OnEndArray() %d\n", state_);
   return 0;
 }
 
+
+void Decode(Reader* src, Url* out_data, ErrorPtr* error) {
+  JsonParser p;
+  p.PushCallbacks(new UrlCallbacks(out_data));
+  p.Decode(src, error);
+}
+
 UrlCallbacks::UrlCallbacks(Url* data)
-    : data_(data) {
+    : data_(data),
+      state_(STATE_NONE) {
 }
 
 int UrlCallbacks::OnNull(JsonParser* p) {
+  printf("UrlCallbacks::OnNull()\n");
   return 0;
 }
 
 int UrlCallbacks::OnBool(JsonParser* p, bool value) {
+  printf("UrlCallbacks::OnBool(%d) %d\n", value, state_);
   return 0;
 }
 
 int UrlCallbacks::OnNumber(JsonParser* p, const char* s, size_t length) {
+  printf("UrlCallbacks::OnNumber(%.*s) %d\n", length, s, state_);
   return 0;
 }
 
 int UrlCallbacks::OnString(JsonParser* p, const unsigned char* s, size_t length) {
+  printf("UrlCallbacks::OnString(%.*s) %d\n", length, s, state_);
   switch (state_) {
     case STATE_CREATED_K:
       SET_STRING_AND_RETURN(created);
@@ -456,17 +505,20 @@ int UrlCallbacks::OnString(JsonParser* p, const unsigned char* s, size_t length)
 }
 
 int UrlCallbacks::OnStartMap(JsonParser* p) {
+  printf("UrlCallbacks::OnStartMap() %d\n", state_);
   switch (state_) {
-    case STATE_ANALYTICS_K: {
-      PUSH_CALLBACK_REF(AnalyticsSummary, analytics);
+    case STATE_NONE:
+      state_ = STATE_TOP;
       return 1;
-    }
+    case STATE_ANALYTICS_K:
+      PUSH_CALLBACK_REF_AND_RETURN(AnalyticsSummary, analytics);
     default:
       return 0;
   }
 }
 
 int UrlCallbacks::OnMapKey(JsonParser* p, const unsigned char* s, size_t length) {
+  printf("UrlCallbacks::OnMapKey(%.*s) %d\n", length, s, state_);
   if (length == 0) return 0;
   switch (s[0]) {
     case 'a':
@@ -493,32 +545,44 @@ int UrlCallbacks::OnMapKey(JsonParser* p, const unsigned char* s, size_t length)
 }
 
 int UrlCallbacks::OnEndMap(JsonParser* p) {
-  if (state_ != STATE_TOP)
-    return 0;
+  printf("UrlCallbacks::OnEndMap() %d\n", state_);
   return p->PopCallbacks() ? 1 : 0;
 }
 
 int UrlCallbacks::OnStartArray(JsonParser* p) {
+  printf("UrlCallbacks::OnStartArray() %d\n", state_);
   return 0;
 }
 
 int UrlCallbacks::OnEndArray(JsonParser* p) {
+  printf("UrlCallbacks::OnEndArray() %d\n", state_);
   return 0;
 }
 
+
+void Decode(Reader* src, UrlHistory* out_data, ErrorPtr* error) {
+  JsonParser p;
+  p.PushCallbacks(new UrlHistoryCallbacks(out_data));
+  p.Decode(src, error);
+}
+
 UrlHistoryCallbacks::UrlHistoryCallbacks(UrlHistory* data)
-    : data_(data) {
+    : data_(data),
+      state_(STATE_NONE) {
 }
 
 int UrlHistoryCallbacks::OnNull(JsonParser* p) {
+  printf("UrlHistoryCallbacks::OnNull()\n");
   return 0;
 }
 
 int UrlHistoryCallbacks::OnBool(JsonParser* p, bool value) {
+  printf("UrlHistoryCallbacks::OnBool(%d) %d\n", value, state_);
   return 0;
 }
 
 int UrlHistoryCallbacks::OnNumber(JsonParser* p, const char* s, size_t length) {
+  printf("UrlHistoryCallbacks::OnNumber(%.*s) %d\n", length, s, state_);
   char* endptr;
   char buffer[32];
   strncpy(&buffer[0], s, length);
@@ -533,6 +597,7 @@ int UrlHistoryCallbacks::OnNumber(JsonParser* p, const char* s, size_t length) {
 }
 
 int UrlHistoryCallbacks::OnString(JsonParser* p, const unsigned char* s, size_t length) {
+  printf("UrlHistoryCallbacks::OnString(%.*s) %d\n", length, s, state_);
   switch (state_) {
     case STATE_KIND_K:
       SET_STRING_AND_RETURN(kind);
@@ -544,17 +609,20 @@ int UrlHistoryCallbacks::OnString(JsonParser* p, const unsigned char* s, size_t 
 }
 
 int UrlHistoryCallbacks::OnStartMap(JsonParser* p) {
+  printf("UrlHistoryCallbacks::OnStartMap() %d\n", state_);
   switch (state_) {
-    case STATE_ITEMS_A: {
-      PUSH_CALLBACK_REF_ARRAY(Url, items);
+    case STATE_NONE:
+      state_ = STATE_TOP;
       return 1;
-    }
+    case STATE_ITEMS_A:
+      PUSH_CALLBACK_REF_ARRAY_AND_RETURN(Url, items);
     default:
       return 0;
   }
 }
 
 int UrlHistoryCallbacks::OnMapKey(JsonParser* p, const unsigned char* s, size_t length) {
+  printf("UrlHistoryCallbacks::OnMapKey(%.*s) %d\n", length, s, state_);
   if (length == 0) return 0;
   switch (s[0]) {
     case 'i':
@@ -576,12 +644,12 @@ int UrlHistoryCallbacks::OnMapKey(JsonParser* p, const unsigned char* s, size_t 
 }
 
 int UrlHistoryCallbacks::OnEndMap(JsonParser* p) {
-  if (state_ != STATE_TOP)
-    return 0;
+  printf("UrlHistoryCallbacks::OnEndMap() %d\n", state_);
   return p->PopCallbacks() ? 1 : 0;
 }
 
 int UrlHistoryCallbacks::OnStartArray(JsonParser* p) {
+  printf("UrlHistoryCallbacks::OnStartArray() %d\n", state_);
   switch (state_) {
     case STATE_ITEMS_K:
       state_ = STATE_ITEMS_A;
@@ -592,6 +660,7 @@ int UrlHistoryCallbacks::OnStartArray(JsonParser* p) {
 }
 
 int UrlHistoryCallbacks::OnEndArray(JsonParser* p) {
+  printf("UrlHistoryCallbacks::OnEndArray() %d\n", state_);
   switch (state_) {
     case STATE_ITEMS_A:
       state_ = STATE_TOP;

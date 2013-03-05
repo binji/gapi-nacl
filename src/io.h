@@ -18,7 +18,18 @@ class Writer {
 class Closer {
  public:
   virtual ~Closer() {}
-  virtual bool Close(ErrorPtr* error) = 0;
+  virtual void Close(ErrorPtr* error) = 0;
+};
+
+class MemoryReader : public Reader {
+ public:
+  MemoryReader(const void* buf, size_t size);
+  virtual size_t Read(void* buf, size_t count, ErrorPtr* error);
+
+ private:
+  const void* buf_;
+  size_t size_;
+  size_t offs_;
 };
 
 size_t Copy(Writer* dst, Reader* src, ErrorPtr* error);

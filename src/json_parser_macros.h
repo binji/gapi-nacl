@@ -1,20 +1,24 @@
 #ifndef JSON_PARSER_MACROS_H_
 #define JSON_PARSER_MACROS_H_
 
-#define PUSH_CALLBACK_OBJECT(TYPE, IDENT) \
-  p->PushCallbacks(new TYPE##Callbacks(&data_->IDENT))
+#define PUSH_CALLBACK_OBJECT_AND_RETURN(TYPE, IDENT) \
+  p->PushCallbacks(new TYPE##Callbacks(&data_->IDENT)); \
+  return 1
 
-#define PUSH_CALLBACK_OBJECT_ARRAY(TYPE, IDENT) \
+#define PUSH_CALLBACK_OBJECT_ARRAY_AND_RETURN(TYPE, IDENT) \
   data_->IDENT.push_back(TYPE##Object()); \
-  p->PushCallbacks(new TYPE##Callbacks(data_->IDENT.back()))
+  p->PushCallbacks(new TYPE##Callbacks(data_->IDENT.back())); \
+  return 1
 
-#define PUSH_CALLBACK_REF(TYPE, IDENT) \
+#define PUSH_CALLBACK_REF_AND_RETURN(TYPE, IDENT) \
   data_->IDENT.reset(new TYPE()); \
-  p->PushCallbacks(new TYPE##Callbacks(data_->IDENT.get()))
+  p->PushCallbacks(new TYPE##Callbacks(data_->IDENT.get())); \
+  return 1
 
-#define PUSH_CALLBACK_REF_ARRAY(TYPE, IDENT) \
+#define PUSH_CALLBACK_REF_ARRAY_AND_RETURN(TYPE, IDENT) \
   data_->IDENT.push_back(std::tr1::shared_ptr<TYPE>(new TYPE())); \
-  p->PushCallbacks(new TYPE##Callbacks(data_->IDENT.back().get()))
+  p->PushCallbacks(new TYPE##Callbacks(data_->IDENT.back().get())); \
+  return 1
 
 #define APPEND_BOOL_AND_RETURN(IDENT) \
   data_->IDENT.push_back(value); \

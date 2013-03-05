@@ -23,7 +23,7 @@ class MessageError : public Error {
 
 class YajlError : public Error {
  public:
-  YajlError(yajl_handle handle);
+  YajlError(yajl_handle handle, const char* text, size_t length);
   virtual ~YajlError();
   virtual std::string ToString() const;
 

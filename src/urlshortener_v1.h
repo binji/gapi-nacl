@@ -6,11 +6,20 @@
 #include <vector>
 #include <string>
 
+#include "error.h"
+#include "io.h"
+
 struct AnalyticsSnapshot;
 struct AnalyticsSummary;
 struct StringCount;
 struct Url;
 struct UrlHistory;
+
+void Decode(Reader* src, AnalyticsSnapshot* out_data, ErrorPtr* error);
+void Decode(Reader* src, AnalyticsSummary* out_data, ErrorPtr* error);
+void Decode(Reader* src, StringCount* out_data, ErrorPtr* error);
+void Decode(Reader* src, Url* out_data, ErrorPtr* error);
+void Decode(Reader* src, UrlHistory* out_data, ErrorPtr* error);
 
 struct AnalyticsSnapshot {
   // Top browsers, e.g. "Chrome"; sorted by (descending) click counts. Only

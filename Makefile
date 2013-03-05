@@ -1,6 +1,6 @@
 DATA_DIR?=out/chromium-data-dir
-CHROME_PATH?=/home/binji/dev/chromium/src/out/Release/chrome
-NEXE_ARGS?=--load-extension=${CURDIR}/out/package --user-data-dir=${DATA_DIR}
+CHROME_PATH?=/usr/local/google/home/binji/dev/chromium/src/out/Release/chrome
+NEXE_ARGS+=--load-extension=${CURDIR}/out/package --user-data-dir=${DATA_DIR}
 
 all: build.ninja
 	@ninja package

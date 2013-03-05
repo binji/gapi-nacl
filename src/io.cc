@@ -1,27 +1,51 @@
 #include "io.h"
+#include <algorithm>
+#include <string.h>
 
-size_t Copy(Writer* dst, Reader* src, ErrorPtr* error) {
+MemoryReader::MemoryReader(const void* buf, size_t size)
+    : buf_(buf),
+      size_(size),
+      offs_(0) {
+}
+
+size_t MemoryReader::Read(void* dst, size_t count, ErrorPtr* error) {
+  if (offs_ == size_) {
+    if (error)
+      *error = EOFError;
+    return 0;
+  }
+
+  count = std::min(size_ - offs_, count);
+  memcpy(dst, static_cast<const char*>(buf_) + offs_, count);
+  offs_ += count;
+  return count;
+}
+
+size_t Copy(Writer* dst, Reader* src, ErrorPtr* out_error) {
   const size_t BUFFER_SIZE = 32*1024;
   char buffer[BUFFER_SIZE];
   size_t total_written = 0;
+  ErrorPtr error;
   while (true) {
-    size_t nread = src->Read(&buffer[0], BUFFER_SIZE, error);
+    size_t nread = src->Read(&buffer[0], BUFFER_SIZE, &error);
     if (nread > 0) {
-      size_t nwrote = dst->Write(&buffer[0], nread, error);
+      size_t nwrote = dst->Write(&buffer[0], nread, &error);
       total_written += nwrote;
-      if (error && *error)
+      if (error)
         break;
-      if (nread != nwrote && error) {
-         error->reset(new MessageError("Short write"));
+      if (nread != nwrote) {
+         error.reset(new MessageError("Short write"));
         break;
       }
     }
-    if (error && *error == EOFError) {
-      error->reset();
+    if (error == EOFError) {
+      error.reset();
       break;
     }
-    if (error && *error)
+    if (error)
       break;
   }
+  if (out_error)
+    *out_error = error;
   return total_written;
 }

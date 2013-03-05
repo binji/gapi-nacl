@@ -141,12 +141,15 @@ HEADER_HEAD = """\
 #include <vector>
 #include <string>
 
+#include "error.h"
+#include "io.h"
+
 [[for schema in self.toplevel_schemas:]]
 struct {{schema}};
 [[]]
 
 [[for schema in self.toplevel_schemas:]]
-bool Decode(JsonParser* p, {{schema}}* out_data);
+void Decode(Reader* src, {{schema}}* out_data, ErrorPtr* error);
 [[]]
 
 """
@@ -229,6 +232,7 @@ class CHeaderService(Service):
 SOURCE_HEAD = """\
 #include "{{header}}"
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
@@ -277,20 +281,24 @@ class {{sub_schema.cbtype}} : public JsonCallbacks {
 
 SOURCE_SCHEMA_DEF = """\
 
-bool Decode(JsonParser* p, {{sub_schema.ctype}}* out_data) {
-  p->PushCallbacks(new {{sub_schema.cbtype}}(out_data));
-  p->Decode();
+void Decode(Reader* src, {{sub_schema.ctype}}* out_data, ErrorPtr* error) {
+  JsonParser p;
+  p.PushCallbacks(new {{sub_schema.cbtype}}(out_data));
+  p.Decode(src, error);
 }
 
 {{sub_schema.cbtype}}::{{sub_schema.base_cbtype}}({{sub_schema.ctype}}* data)
-    : data_(data) {
+    : data_(data),
+      state_(STATE_NONE) {
 }
 
 int {{sub_schema.cbtype}}::OnNull(JsonParser* p) {
+  printf("{{sub_schema.cbtype}}::OnNull()\\n");
   return 0;
 }
 
 int {{sub_schema.cbtype}}::OnBool(JsonParser* p, bool value) {
+  printf("{{sub_schema.cbtype}}::OnBool(%d) %d\\n", value, state_);
 [[if sub_schema.bool_states:]]
   switch (state_) {
 [[  for state, (cident, ctype, is_array) in sorted(sub_schema.bool_states.iteritems()):]]
@@ -309,6 +317,7 @@ int {{sub_schema.cbtype}}::OnBool(JsonParser* p, bool value) {
 }
 
 int {{sub_schema.cbtype}}::OnNumber(JsonParser* p, const char* s, size_t length) {
+  printf("{{sub_schema.cbtype}}::OnNumber(%.*s) %d\\n", length, s, state_);
 [[if sub_schema.number_states:]]
   char* endptr;
   char buffer[32];
@@ -316,23 +325,14 @@ int {{sub_schema.cbtype}}::OnNumber(JsonParser* p, const char* s, size_t length)
   switch (state_) {
 [[  for state, (cident, ctype, is_array) in sorted(sub_schema.number_states.iteritems()):]]
 [[    prefix = 'APPEND' if is_array else 'SET']]
-[[    if ctype == "int32_t":]]
     case {{state}}:
+[[    if ctype == "int32_t":]]
       {{prefix}}_INT32_AND_RETURN({{cident}});
 [[    elif ctype == "uint32_t":]]
-    case {{state}}:
       {{prefix}}_UINT32_AND_RETURN({{cident}});
-[[    elif ctype == "int64_t":]]
-    case {{state}}:
-      {{prefix}}_INT64_AND_RETURN({{cident}});
-[[    elif ctype == "uint64_t":]]
-    case {{state}}:
-      {{prefix}}_UINT64_AND_RETURN({{cident}});
 [[    elif ctype == "float":]]
-    case {{state}}:
       {{prefix}}_FLOAT_AND_RETURN({{cident}});
 [[    elif ctype == "double":]]
-    case {{state}}:
       {{prefix}}_DOUBLE_AND_RETURN({{cident}});
 [[  ]]
     default:
@@ -344,14 +344,23 @@ int {{sub_schema.cbtype}}::OnNumber(JsonParser* p, const char* s, size_t length)
 }
 
 int {{sub_schema.cbtype}}::OnString(JsonParser* p, const unsigned char* s, size_t length) {
+  printf("{{sub_schema.cbtype}}::OnString(%.*s) %d\\n", length, s, state_);
 [[if sub_schema.string_states:]]
+[[  if any(ctype in ("int64_t", "uint64_t") for _,(_, ctype, _) in sub_schema.string_states.iteritems()):]]
+  char* endptr;
+  char buffer[32];
+  strncpy(&buffer[0], reinterpret_cast<const char*>(s), length);
+[[  ]]
   switch (state_) {
 [[  for state, (cident, ctype, is_array) in sorted(sub_schema.string_states.iteritems()):]]
+[[    prefix = 'APPEND' if is_array else 'SET']]
     case {{state}}:
-[[    if is_array:]]
-      APPEND_STRING_AND_RETURN({{cident}});
+[[    if ctype == "int64_t":]]
+      {{prefix}}_INT64_AND_RETURN({{cident}});
+[[    elif ctype == "uint64_t":]]
+      {{prefix}}_UINT64_AND_RETURN({{cident}});
 [[    else:]]
-      SET_STRING_AND_RETURN({{cident}});
+      {{prefix}}_STRING_AND_RETURN({{cident}});
 [[  ]]
     default:
       return 0;
@@ -362,33 +371,32 @@ int {{sub_schema.cbtype}}::OnString(JsonParser* p, const unsigned char* s, size_
 }
 
 int {{sub_schema.cbtype}}::OnStartMap(JsonParser* p) {
-[[if sub_schema.map_states:]]
+  printf("{{sub_schema.cbtype}}::OnStartMap() %d\\n", state_);
   switch (state_) {
+    case STATE_NONE:
+      state_ = STATE_TOP;
+      return 1;
+[[if sub_schema.map_states:]]
 [[  for state, (cident, ctype, is_array, map_type) in sorted(sub_schema.map_states.iteritems()):]]
-    case {{state}}: {
+    case {{state}}:
 [[    if map_type == 'ref':]]
 [[      if is_array:]]
-      PUSH_CALLBACK_REF_ARRAY({{ctype}}, {{cident}});
+      PUSH_CALLBACK_REF_ARRAY_AND_RETURN({{ctype}}, {{cident}});
 [[      else:]]
-      PUSH_CALLBACK_REF({{ctype}}, {{cident}});
+      PUSH_CALLBACK_REF_AND_RETURN({{ctype}}, {{cident}});
 [[    elif map_type == 'object':]]
 [[      if is_array:]]
-      PUSH_CALLBACK_OBJECT_ARRAY({{ctype}}, {{cident}});
+      PUSH_CALLBACK_OBJECT_ARRAY_AND_RETURN({{ctype}}, {{cident}});
 [[      else:]]
-      PUSH_CALLBACK_OBJECT({{ctype}}, {{cident}});
-[[    ]]
-      return 1;
-    }
-[[  ]]
+      PUSH_CALLBACK_OBJECT_AND_RETURN({{ctype}}, {{cident}});
+[[]]
     default:
       return 0;
   }
-[[else:]]
-  return 0;
-[[]]
 }
 
 int {{sub_schema.cbtype}}::OnMapKey(JsonParser* p, const unsigned char* s, size_t length) {
+  printf("{{sub_schema.cbtype}}::OnMapKey(%.*s) %d\\n", length, s, state_);
   if (length == 0) return 0;
   switch (s[0]) {
 [[for first_char, group in groupby(sorted(sub_schema.props), lambda p:p[0][0]):]]
@@ -406,12 +414,12 @@ int {{sub_schema.cbtype}}::OnMapKey(JsonParser* p, const unsigned char* s, size_
 }
 
 int {{sub_schema.cbtype}}::OnEndMap(JsonParser* p) {
-  if (state_ != STATE_TOP)
-    return 0;
+  printf("{{sub_schema.cbtype}}::OnEndMap() %d\\n", state_);
   return p->PopCallbacks() ? 1 : 0;
 }
 
 int {{sub_schema.cbtype}}::OnStartArray(JsonParser* p) {
+  printf("{{sub_schema.cbtype}}::OnStartArray() %d\\n", state_);
 [[if sub_schema.array_states:]]
   switch (state_) {
 [[  for state, (next_state, prev_state) in sub_schema.array_states.iteritems():]]
@@ -428,6 +436,7 @@ int {{sub_schema.cbtype}}::OnStartArray(JsonParser* p) {
 }
 
 int {{sub_schema.cbtype}}::OnEndArray(JsonParser* p) {
+  printf("{{sub_schema.cbtype}}::OnEndArray() %d\\n", state_);
 [[if sub_schema.array_states:]]
   switch (state_) {
 [[  for state, (next_state, prev_state) in sub_schema.array_states.iteritems():]]
@@ -564,9 +573,7 @@ class CSourceService(Service):
     ctype = TYPE_DICT[(prop_type, prop_format)]
     is_array = self.state.endswith('_A')
     data = (cident, ctype, is_array)
-    if prop_type in ['number', 'integer'] or \
-        (prop_type == 'string' and 'int' in prop_format):
-      # Number
+    if prop_type in ['number', 'integer']:
       assert self.state not in self.schema.number_states
       self.schema.number_states[self.state] = data
     elif prop_type == 'boolean':
