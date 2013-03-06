@@ -255,6 +255,8 @@ SOURCE_HEAD = """\
 [[if self.options.namespace:]]
 namespace {{self.options.namespace}} {
 
+static const size_t kMaxNumberBufferSize = 32;
+
 [[]]
 """
 
@@ -346,8 +348,10 @@ int {{sub_schema.cbtype}}::OnNumber(JsonParser* p, const char* s, size_t length)
 [[]]
 [[if sub_schema.number_states:]]
   char* endptr;
-  char buffer[32];
-  strncpy(&buffer[0], s, length);
+  char buffer[kMaxNumberBufferSize];
+  size_t nbytes = std::min(kMaxNumberBufferSize - 1, length);
+  strncpy(&buffer[0], s, nbytes);
+  buffer[nbytes] = 0;
   switch (state_) {
 [[  for state, (cident, ctype, is_array) in sorted(sub_schema.number_states.iteritems()):]]
 [[    prefix = 'APPEND' if is_array else 'SET']]
@@ -376,8 +380,10 @@ int {{sub_schema.cbtype}}::OnString(JsonParser* p, const unsigned char* s, size_
 [[if sub_schema.string_states:]]
 [[  if any(ctype in ("int64_t", "uint64_t") for _,(_, ctype, _) in sub_schema.string_states.iteritems()):]]
   char* endptr;
-  char buffer[32];
-  strncpy(&buffer[0], reinterpret_cast<const char*>(s), length);
+  char buffer[kMaxNumberBufferSize];
+  size_t nbytes = std::min(kMaxNumberBufferSize - 1, length);
+  strncpy(&buffer[0], reinterpret_cast<const char*>(s), nbytes);
+  buffer[nbytes] = 0;
 [[  ]]
   switch (state_) {
 [[  for state, (cident, ctype, is_array) in sorted(sub_schema.string_states.iteritems()):]]
@@ -407,18 +413,18 @@ int {{sub_schema.cbtype}}::OnStartMap(JsonParser* p) {
       state_ = STATE_TOP;
       return 1;
 [[if sub_schema.map_states:]]
-[[  for state, (cident, ctype, is_array, map_type) in sorted(sub_schema.map_states.iteritems()):]]
+[[  for state, (cident, ctype, cbtype, is_array, map_type) in sorted(sub_schema.map_states.iteritems()):]]
     case {{state}}:
 [[    if map_type == 'ref':]]
 [[      if is_array:]]
-      PUSH_CALLBACK_REF_ARRAY_AND_RETURN({{ctype}}, {{cident}});
+      PUSH_CALLBACK_REF_ARRAY_AND_RETURN({{ctype}}, {{cbtype}}, {{cident}});
 [[      else:]]
-      PUSH_CALLBACK_REF_AND_RETURN({{ctype}}, {{cident}});
+      PUSH_CALLBACK_REF_AND_RETURN({{ctype}}, {{cbtype}}, {{cident}});
 [[    elif map_type == 'object':]]
 [[      if is_array:]]
-      PUSH_CALLBACK_OBJECT_ARRAY_AND_RETURN({{ctype}}, {{cident}});
+      PUSH_CALLBACK_OBJECT_ARRAY_AND_RETURN({{ctype}}, {{cbtype}}, {{cident}});
 [[      else:]]
-      PUSH_CALLBACK_OBJECT_AND_RETURN({{ctype}}, {{cident}});
+      PUSH_CALLBACK_OBJECT_AND_RETURN({{ctype}}, {{cbtype}}, {{cident}});
 [[]]
     default:
       return 0;
@@ -494,19 +500,20 @@ int {{sub_schema.cbtype}}::OnEndArray(JsonParser* p) {
 
 
 class SchemaInfo(object):
-  def __init__(self, schema_name=None, parent_cbtype=None):
+  def __init__(self, schema_name=None, parent=None):
     if schema_name:
       cap = gapi_utils.CapWords(schema_name)
       self.base_cbtype = '%sCallbacks' % cap
-      if parent_cbtype:
-        self.cbtype = '%s::%s' % (parent_cbtype, self.base_cbtype)
-        self.ctype = '%sObject' % cap
+      if parent.cbtype:
+        self.cbtype = '%s::%s' % (parent.cbtype, self.base_cbtype)
+        self.ctype = '%s::%sObject' % (parent.ctype, cap)
       else:
         self.cbtype = self.base_cbtype
         self.ctype = cap
     else:
       self.cbtype = ''
       self.base_cbtype = ''
+      self.ctype = ''
     self.states = set()
     self.state_stack = []
     self.sub_schemas = set()
@@ -580,7 +587,13 @@ class CSourceService(Service):
       outf.write(RunTemplateString(SOURCE_FOOT, vars()))
 
   def BeginSchema(self, schema_name, schema):
-    schema_info = SchemaInfo(schema_name, self.schema.cbtype)
+    schema_info = SchemaInfo(schema_name, self.schema)
+
+    cident = gapi_utils.SnakeCase(schema_name)
+    is_array = self.state.endswith('_A')
+    self.schema.map_states[self.state] = \
+        (cident, schema_info.ctype, schema_info.cbtype, is_array, 'object')
+
     self.schema.sub_schemas.add(schema_info.base_cbtype)
     self.schema_stack.append(schema_info)
 
@@ -606,7 +619,7 @@ class CSourceService(Service):
     cident = gapi_utils.SnakeCase(prop_name)
     is_array = self.state.endswith('_A')
     assert self.state not in self.schema.map_states
-    self.schema.map_states[self.state] = (cident, ref, is_array, 'ref')
+    self.schema.map_states[self.state] = (cident, ref, ref + 'Callbacks', is_array, 'ref')
 
   def OnPropertyTypeFormat(self, prop_name, prop, prop_type, prop_format):
     # TODO(binji): handle any
@@ -636,16 +649,6 @@ class CSourceService(Service):
 
   def EndPropertyTypeArray(self, prop_name, prop, prop_items):
     self.PopState()
-
-  def BeginPropertyTypeObject(self, prop_name, prop):
-    cident = gapi_utils.SnakeCase(prop_name)
-    ctype = gapi_utils.CapWords(prop_name)
-    is_array = self.state.endswith('_A')
-    assert self.state not in self.schema.map_states
-    self.schema.map_states[self.state] = (cident, ctype, is_array, 'object')
-
-  def EndPropertyTypeObject(self, prop_name, prop, schema_name):
-    pass
 
 
 def ReadCachedJson(url, filename):

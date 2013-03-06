@@ -1,23 +1,23 @@
 #ifndef JSON_PARSER_MACROS_H_
 #define JSON_PARSER_MACROS_H_
 
-#define PUSH_CALLBACK_OBJECT_AND_RETURN(TYPE, IDENT) \
-  p->PushCallbacks(new TYPE##Callbacks(&data_->IDENT)); \
+#define PUSH_CALLBACK_OBJECT_AND_RETURN(TYPE, CBTYPE, IDENT) \
+  p->PushCallbacks(new CBTYPE(&data_->IDENT)); \
   return 1
 
-#define PUSH_CALLBACK_OBJECT_ARRAY_AND_RETURN(TYPE, IDENT) \
-  data_->IDENT.push_back(TYPE##Object()); \
-  p->PushCallbacks(new TYPE##Callbacks(data_->IDENT.back())); \
+#define PUSH_CALLBACK_OBJECT_ARRAY_AND_RETURN(TYPE, CBTYPE, IDENT) \
+  data_->IDENT.push_back(TYPE()); \
+  p->PushCallbacks(new CBTYPE(&data_->IDENT.back())); \
   return 1
 
-#define PUSH_CALLBACK_REF_AND_RETURN(TYPE, IDENT) \
+#define PUSH_CALLBACK_REF_AND_RETURN(TYPE, CBTYPE, IDENT) \
   data_->IDENT.reset(new TYPE()); \
-  p->PushCallbacks(new TYPE##Callbacks(data_->IDENT.get())); \
+  p->PushCallbacks(new CBTYPE(data_->IDENT.get())); \
   return 1
 
-#define PUSH_CALLBACK_REF_ARRAY_AND_RETURN(TYPE, IDENT) \
+#define PUSH_CALLBACK_REF_ARRAY_AND_RETURN(TYPE, CBTYPE, IDENT) \
   data_->IDENT.push_back(std::tr1::shared_ptr<TYPE>(new TYPE())); \
-  p->PushCallbacks(new TYPE##Callbacks(data_->IDENT.back().get())); \
+  p->PushCallbacks(new CBTYPE(data_->IDENT.back().get())); \
   return 1
 
 #define APPEND_BOOL_AND_RETURN(IDENT) \
@@ -76,7 +76,7 @@
   APPEND_FP_AND_RETURN(float, IDENT, strtof)
 
 #define APPEND_DOUBLE_AND_RETURN(IDENT) \
-  APPEND_DOUBLE_AND_RETURN(double, IDENT, strtod)
+  APPEND_FP_AND_RETURN(double, IDENT, strtod)
 
 #define SET_FP_AND_RETURN(TYPE, IDENT, FUNC) { \
   TYPE value = FUNC(&buffer[0], &endptr); \
@@ -89,10 +89,11 @@
   SET_FP_AND_RETURN(float, IDENT, strtof)
 
 #define SET_DOUBLE_AND_RETURN(IDENT) \
-  SET_DOUBLE_AND_RETURN(double, IDENT, strtod)
+  SET_FP_AND_RETURN(double, IDENT, strtod)
 
 #define APPEND_STRING_AND_RETURN(IDENT) \
-  data_->IDENT.push_back(std::string(s, length)); \
+  data_->IDENT.push_back( \
+      std::string(reinterpret_cast<const char*>(s), length)); \
   return 1
 
 #define SET_STRING_AND_RETURN(IDENT) \

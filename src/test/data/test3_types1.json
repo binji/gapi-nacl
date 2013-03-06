@@ -1,0 +1,18 @@
+{
+  "myInt32": -1234,
+  "myUint32": 1234,
+  "myInt64": "-3123456789",
+  "myUint64": "13123456789",
+  "myFloat": 14.5,
+  "myDouble": 1e24,
+  "myString": "Hello, World!",
+  "myBool": true,
+  "myRef": {
+    "value1": "Goodbye, moon.",
+    "value2": 8675309
+  },
+  "myObject": {
+    "myObjectString": "Hi, rock?",
+    "myObjectFloat": 3.14159
+  }
+}

@@ -111,6 +111,7 @@ TEST_SOURCE_FILES = [
   'src/test/main.cc',
   'out/gen/src/test/data/schema1.cc',
   'out/gen/src/test/data/schema2.cc',
+  'out/gen/src/test/data/schema3.cc',
 ]
 TEST_GEN_FILES = [
   'src/test/data/schema1.json',

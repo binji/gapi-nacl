@@ -66,6 +66,20 @@
         "myRef": {
           "$ref": "DummyRef",
           "description": "A reference to DummyRef"
+        },
+        "myObject": {
+          "type": "object",
+          "properties": {
+            "myObjectString": {
+              "type": "string",
+              "description": "An embedded object's string"
+            },
+            "myObjectFloat": {
+              "type": "number",
+              "format": "float",
+              "description": "An embedded object's float"
+            }
+          }
         }
       }
     },
@@ -147,6 +161,24 @@
           "description": "An array of DummyRef references",
           "items": {
             "$ref": "DummyRef"
+          }
+        },
+        "myObjectArray": {
+          "type": "array",
+          "description": "An array of embedded objects",
+          "items": {
+            "type": "object",
+            "properties": {
+              "myObjectString": {
+                "type": "string",
+                "description": "An embedded object's string"
+              },
+              "myObjectFloat": {
+                "type": "number",
+                "format": "float",
+                "description": "An embedded object's float"
+              }
+            }
           }
         }
       }
