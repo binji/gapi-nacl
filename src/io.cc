@@ -21,6 +21,32 @@ size_t MemoryReader::Read(void* dst, size_t count, ErrorPtr* error) {
   return count;
 }
 
+FileReader::FileReader(const char* filename)
+   : file_(NULL) {
+  file_ = fopen(filename, "rt");
+}
+
+FileReader::~FileReader() {
+  if (file_)
+    fclose(file_);
+}
+
+size_t FileReader::Read(void* buf, size_t count, ErrorPtr* error) {
+  if (file_ == NULL) {
+    error->reset(new MessageError("File not open"));
+    return 0;
+  }
+
+  size_t nread = fread(buf, 1, count, file_);
+  if (error) {
+    if (feof(file_))
+      *error = EOFError;
+    else if (ferror(file_))
+      error->reset(new MessageError("Error reading file"));
+  }
+  return nread;
+}
+
 size_t Copy(Writer* dst, Reader* src, ErrorPtr* out_error) {
   const size_t BUFFER_SIZE = 32*1024;
   char buffer[BUFFER_SIZE];

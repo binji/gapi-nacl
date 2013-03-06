@@ -1,6 +1,7 @@
 #ifndef IO_H_
 #define IO_H_
 
+#include <stdio.h>
 #include "error.h"
 
 class Reader {
@@ -30,6 +31,16 @@ class MemoryReader : public Reader {
   const void* buf_;
   size_t size_;
   size_t offs_;
+};
+
+class FileReader : public Reader {
+ public:
+  explicit FileReader(const char* filename);
+  ~FileReader();
+  virtual size_t Read(void* buf, size_t count, ErrorPtr* error);
+
+ private:
+  FILE* file_;
 };
 
 size_t Copy(Writer* dst, Reader* src, ErrorPtr* error);

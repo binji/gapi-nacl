@@ -109,10 +109,12 @@ GAPI_SOURCE_FILES = [
 ]
 TEST_SOURCE_FILES = [
   'src/test/main.cc',
-  'out/gen/src/test/data/test1.cc',
+  'out/gen/src/test/data/schema1.cc',
+  'out/gen/src/test/data/schema2.cc',
 ]
 TEST_GEN_FILES = [
-  'src/test/data/test1.json',
+  'src/test/data/schema1.json',
+  'src/test/data/schema2.json',
 ]
 SOURCE_FILES = [
   'src/gapi.cc',
