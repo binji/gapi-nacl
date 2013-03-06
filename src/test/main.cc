@@ -27,6 +27,10 @@ TEST(GenTest2, TestParse) {
   ASSERT_TRUE(data.analytics->all_time.get() != NULL);
   ASSERT_EQ(10073, data.analytics->all_time->short_url_clicks);
   ASSERT_EQ(10, data.analytics->all_time->referrers.size());
+  EXPECT_STREQ("www.google.com",
+               data.analytics->all_time->referrers[6]->id.c_str());
+  ASSERT_EQ(10, data.analytics->all_time->browsers.size());
+  EXPECT_STREQ("Chrome", data.analytics->all_time->browsers[0]->id.c_str());
 }
 
 int main(int argc, char** argv) {

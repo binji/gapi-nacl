@@ -115,6 +115,7 @@ TEST_SOURCE_FILES = [
 TEST_GEN_FILES = [
   'src/test/data/schema1.json',
   'src/test/data/schema2.json',
+  'src/test/data/schema3.json',
 ]
 SOURCE_FILES = [
   'src/gapi.cc',
@@ -329,14 +330,12 @@ def Code(w):
       'out'
     ])
 
-  gen_cc_h = []
   for name in TEST_GEN_FILES:
     outbase = os.path.join('out/gen', os.path.splitext(name)[0])
     outs = [outbase + ext for ext in ('.h', '.cc')]
     w.build(outs, 'gapi-gen', name, implicit='script/gapi.py',
         variables={'outbase': outbase,
                    'flags': '-n %s' % FilenameToNamespace(name)})
-    gen_cc_h.extend(outs)
 
   BuildProject(
     w, 'gapi_test', 'link',
@@ -348,7 +347,6 @@ def Code(w):
       'out',
       'third_party/gtest/include',
     ],
-    order_only=gen_cc_h,
     libs=[
       'out/libgapi_{arch}.a',
       'out/libgtest_{arch}.a',

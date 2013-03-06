@@ -146,8 +146,8 @@ HEADER_HEAD = """\
 #include "error.h"
 #include "io.h"
 
-[[if self.namespace:]]
-namespace {{self.namespace}} {
+[[if self.options.namespace:]]
+namespace {{self.options.namespace}} {
 [[]]
 
 [[for schema in self.toplevel_schemas:]]
@@ -161,8 +161,8 @@ void Decode(Reader* src, {{schema}}* out_data, ErrorPtr* error);
 """
 
 HEADER_FOOT = """\
-[[if self.namespace:]]
-}  // namespace {{self.namespace}}
+[[if self.options.namespace:]]
+}  // namespace {{self.options.namespace}}
 
 [[]]
 #endif  // {{include_guard}}
@@ -178,10 +178,10 @@ HEADER_SCHEMA_FOOT = """\
 """
 
 class CHeaderService(Service):
-  def __init__(self, service, outfname, namespace):
+  def __init__(self, service, outfname, options):
     self.f = cStringIO.StringIO()
     self.outfname = outfname
-    self.namespace = namespace
+    self.options = options
     self.indent = ''
     self.prop_stack = []
     self.schema_stack = []
@@ -252,15 +252,15 @@ SOURCE_HEAD = """\
 #include "json_parser_macros.h"
 
 
-[[if self.namespace:]]
-namespace {{self.namespace}} {
+[[if self.options.namespace:]]
+namespace {{self.options.namespace}} {
 
 [[]]
 """
 
 SOURCE_FOOT = """\
-[[if self.namespace:]]
-}  // namespace {{self.namespace}}
+[[if self.options.namespace:]]
+}  // namespace {{self.options.namespace}}
 [[]]
 """
 
@@ -313,12 +313,16 @@ void Decode(Reader* src, {{sub_schema.ctype}}* out_data, ErrorPtr* error) {
 }
 
 int {{sub_schema.cbtype}}::OnNull(JsonParser* p) {
+[[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnNull()\\n");
+[[]]
   return 0;
 }
 
 int {{sub_schema.cbtype}}::OnBool(JsonParser* p, bool value) {
+[[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnBool(%d) %d\\n", value, state_);
+[[]]
 [[if sub_schema.bool_states:]]
   switch (state_) {
 [[  for state, (cident, ctype, is_array) in sorted(sub_schema.bool_states.iteritems()):]]
@@ -337,7 +341,9 @@ int {{sub_schema.cbtype}}::OnBool(JsonParser* p, bool value) {
 }
 
 int {{sub_schema.cbtype}}::OnNumber(JsonParser* p, const char* s, size_t length) {
+[[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnNumber(%.*s) %d\\n", static_cast<int>(length), s, state_);
+[[]]
 [[if sub_schema.number_states:]]
   char* endptr;
   char buffer[32];
@@ -364,7 +370,9 @@ int {{sub_schema.cbtype}}::OnNumber(JsonParser* p, const char* s, size_t length)
 }
 
 int {{sub_schema.cbtype}}::OnString(JsonParser* p, const unsigned char* s, size_t length) {
+[[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnString(%.*s) %d\\n", static_cast<int>(length), s, state_);
+[[]]
 [[if sub_schema.string_states:]]
 [[  if any(ctype in ("int64_t", "uint64_t") for _,(_, ctype, _) in sub_schema.string_states.iteritems()):]]
   char* endptr;
@@ -391,7 +399,9 @@ int {{sub_schema.cbtype}}::OnString(JsonParser* p, const unsigned char* s, size_
 }
 
 int {{sub_schema.cbtype}}::OnStartMap(JsonParser* p) {
+[[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnStartMap() %d\\n", state_);
+[[]]
   switch (state_) {
     case STATE_NONE:
       state_ = STATE_TOP;
@@ -416,7 +426,9 @@ int {{sub_schema.cbtype}}::OnStartMap(JsonParser* p) {
 }
 
 int {{sub_schema.cbtype}}::OnMapKey(JsonParser* p, const unsigned char* s, size_t length) {
+[[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnMapKey(%.*s) %d\\n", static_cast<int>(length), s, state_);
+[[]]
   if (length == 0) return 0;
   switch (s[0]) {
 [[for first_char, group in groupby(sorted(sub_schema.props), lambda p:p[0][0]):]]
@@ -434,12 +446,16 @@ int {{sub_schema.cbtype}}::OnMapKey(JsonParser* p, const unsigned char* s, size_
 }
 
 int {{sub_schema.cbtype}}::OnEndMap(JsonParser* p) {
+[[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnEndMap() %d\\n", state_);
+[[]]
   return p->PopCallbacks() ? 1 : 0;
 }
 
 int {{sub_schema.cbtype}}::OnStartArray(JsonParser* p) {
+[[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnStartArray() %d\\n", state_);
+[[]]
 [[if sub_schema.array_states:]]
   switch (state_) {
 [[  for state, (next_state, prev_state) in sub_schema.array_states.iteritems():]]
@@ -456,7 +472,9 @@ int {{sub_schema.cbtype}}::OnStartArray(JsonParser* p) {
 }
 
 int {{sub_schema.cbtype}}::OnEndArray(JsonParser* p) {
+[[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnEndArray() %d\\n", state_);
+[[]]
 [[if sub_schema.array_states:]]
   switch (state_) {
 [[  for state, (next_state, prev_state) in sub_schema.array_states.iteritems():]]
@@ -504,9 +522,9 @@ class SchemaInfo(object):
 
 
 class CSourceService(Service):
-  def __init__(self, service, outfname, headerfname, namespace):
+  def __init__(self, service, outfname, headerfname, options):
     self.outfname = outfname
-    self.namespace = namespace
+    self.options = options
     self.headerfname = headerfname
     self.schema_stack = [SchemaInfo()]
     super(CSourceService, self).__init__(service)
@@ -647,6 +665,7 @@ def main(args):
   parser = optparse.OptionParser()
   parser.add_option('-o', dest='outbasename')
   parser.add_option('-n', '--namespace')
+  parser.add_option('-d', '--debug', action='store_true')
   options, args = parser.parse_args(args)
 
   if args:
@@ -659,8 +678,8 @@ def main(args):
     basename = options.outbasename
     header_name = basename + '.h'
     source_name = basename + '.cc'
-    CHeaderService(service, header_name, options.namespace)
-    CSourceService(service, source_name, header_name, options.namespace)
+    CHeaderService(service, header_name, options)
+    CSourceService(service, source_name, header_name, options)
   else:
     # Read and generate for all descovery APIs.
     d = ReadCachedJson(DISCOVERY_API, API_JSON)
@@ -670,8 +689,8 @@ def main(args):
       header_name = basename + '.h'
       source_name = basename + '.cc'
       service = ReadCachedJson(item['discoveryRestUrl'], json_name)
-      CHeaderService(service, header_name, options.namespace)
-      CSourceService(service, source_name, header_name, options.namespace)
+      CHeaderService(service, header_name, options)
+      CSourceService(service, source_name, header_name, options)
 
 
 if __name__ == '__main__':

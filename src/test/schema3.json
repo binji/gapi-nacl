@@ -1,0 +1,32 @@
+{
+  "name": "dummy",
+  "version": "v1",
+  "schemas": {
+    "Types": {
+      "id": "Types",
+      "type": "object",
+      "properties": {
+        "my_int32": {
+          "type": "integer",
+          "format": "int32",
+          "description": "A 32-bit integer",
+        },
+        "my_uint32": {
+          "type": "integer",
+          "format": "uint32",
+          "description": "A 32-bit unsigned integer",
+        },
+        "my_int64": {
+          "type": "string",
+          "format": "int64",
+          "description": "A 64-bit integer",
+        },
+        "my_uint64": {
+          "type": "string",
+          "format": "uint64",
+          "description": "A 64-bit unsigned integer",
+        }
+      }
+    }
+  }
+}

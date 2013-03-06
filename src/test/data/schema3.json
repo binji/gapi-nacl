@@ -1,0 +1,155 @@
+{
+  "name": "dummy",
+  "version": "v1",
+  "schemas": {
+    "DummyRef": {
+      "id": "DummyRef",
+      "type": "object",
+      "properties": {
+        "value1": {
+          "type": "string",
+          "description": "a string"
+        },
+        "value2": {
+          "type": "integer",
+          "format": "int32",
+          "description": "a number"
+        }
+      }
+    },
+    "Types": {
+      "id": "Types",
+      "type": "object",
+      "properties": {
+        "myInt32": {
+          "type": "integer",
+          "format": "int32",
+          "description": "A 32-bit integer"
+        },
+        "myUint32": {
+          "type": "integer",
+          "format": "uint32",
+          "description": "A 32-bit unsigned integer"
+        },
+        "myInt64": {
+          "type": "string",
+          "format": "int64",
+          "description": "A 64-bit integer"
+        },
+        "myUint64": {
+          "type": "string",
+          "format": "uint64",
+          "description": "A 64-bit unsigned integer"
+        },
+        "myFloat": {
+          "type": "number",
+          "format": "float",
+          "description": "A 32-bit floating point number"
+        },
+        "myDouble": {
+          "type": "number",
+          "format": "double",
+          "description": "A 64-bit floating point number"
+        },
+        "myString": {
+          "type": "string",
+          "description": "A string"
+        },
+        "myBool": {
+          "type": "boolean",
+          "description": "A boolean"
+        },
+        "myAny": {
+          "type": "any",
+          "description": "Could be anything"
+        },
+        "myRef": {
+          "$ref": "DummyRef",
+          "description": "A reference to DummyRef"
+        }
+      }
+    },
+    "ArrayTypes": {
+      "id": "ArrayTypes",
+      "type": "object",
+      "properties": {
+        "myInt32Array": {
+          "type": "array",
+          "description": "An array of 32-bit integers",
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "myUint32Array": {
+          "type": "array",
+          "description": "An array of 32-bit unsigned integers",
+          "items": {
+            "type": "integer",
+            "format": "uint32"
+          }
+        },
+        "myInt64Array": {
+          "type": "array",
+          "description": "An array of 64-bit integers",
+          "items": {
+            "type": "string",
+            "format": "int64"
+          }
+        },
+        "myUint64Array": {
+          "type": "array",
+          "description": "An array of 64-bit unsigned integers",
+          "items": {
+            "type": "string",
+            "format": "uint64"
+          }
+        },
+        "myFloatArray": {
+          "type": "array",
+          "description": "An array of 32-bit floating point numbers",
+          "items": {
+            "type": "number",
+            "format": "float"
+          }
+        },
+        "myDoubleArray": {
+          "type": "array",
+          "description": "An array of 64-bit floating point numbers",
+          "items": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "myStringArray": {
+          "type": "array",
+          "description": "An array of strings",
+          "items": {
+            "type": "string"
+          }
+        },
+        "myBoolArray": {
+          "type": "array",
+          "description": "An array of booleans",
+          "items": {
+            "type": "boolean"
+          }
+        },
+        "myAnyArray": {
+          "type": "array",
+          "description": "An array of anything",
+          "items": {
+            "type": "any"
+          }
+        },
+        "myRefArray": {
+          "type": "array",
+          "description": "An array of DummyRef references",
+          "items": {
+            "$ref": "DummyRef"
+          }
+        }
+      }
+    }
+  }
+}
