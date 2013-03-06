@@ -56,6 +56,29 @@ TEST(TypesTest, TestParse) {
   EXPECT_FLOAT_EQ(3.14159, data.my_object.my_object_float);
 }
 
+TEST(TypesTest, TestFailures) {
+  struct TestCase {
+    const char* json;
+    const char* error;
+  };
+  TestCase test_cases[] = {
+    { "{\"myInt32\": \"\"}", "Unexpected string" },
+    { "{\"myInt32\": 3.5}", "Error parsing integer" },
+    { "{\"myInt32\": 123456789012}", "Error parsing integer" },
+  };
+
+  for (int i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]); ++i) {
+    const char* json = test_cases[i].json;
+    test_types_schema::Types data;
+    MemoryReader reader(&json[0], strlen(json));
+    ErrorPtr error;
+    test_types_schema::Decode(&reader, &data, &error);
+    ASSERT_TRUE(error.get() != NULL) << "Expected error for testcase: " << json;
+    EXPECT_STREQ(test_cases[i].error, error->ToString().c_str())
+        << "Testcase: " << json;
+  }
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

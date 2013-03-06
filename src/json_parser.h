@@ -13,18 +13,21 @@ class JsonParser;
 class JsonCallbacks {
  public:
   virtual ~JsonCallbacks() {}
-  virtual int OnNull(JsonParser* p) = 0;
-  virtual int OnBool(JsonParser* p, bool value) = 0;
-  virtual int OnNumber(JsonParser* p, const char* s, size_t len) = 0;
-  virtual int OnString(JsonParser* p, const unsigned char* s, size_t len) = 0;
-  virtual int OnStartMap(JsonParser* p) = 0;
-  virtual int OnMapKey(JsonParser* p, const unsigned char* s, size_t len) = 0;
-  virtual int OnEndMap(JsonParser* p) = 0;
-  virtual int OnStartArray(JsonParser* p) = 0;
-  virtual int OnEndArray(JsonParser* p) = 0;
+  virtual int OnNull(JsonParser* p, ErrorPtr* ptr) = 0;
+  virtual int OnBool(JsonParser* p, bool value, ErrorPtr* ptr) = 0;
+  virtual int OnNumber(
+      JsonParser* p, const char* s, size_t len, ErrorPtr* ptr) = 0;
+  virtual int OnString(
+      JsonParser* p, const unsigned char* s, size_t len, ErrorPtr* ptr) = 0;
+  virtual int OnStartMap(JsonParser* p, ErrorPtr* ptr) = 0;
+  virtual int OnMapKey(
+      JsonParser* p, const unsigned char* s, size_t len, ErrorPtr* ptr) = 0;
+  virtual int OnEndMap(JsonParser* p, ErrorPtr* ptr) = 0;
+  virtual int OnStartArray(JsonParser* p, ErrorPtr* ptr) = 0;
+  virtual int OnEndArray(JsonParser* p, ErrorPtr* ptr) = 0;
 };
 
-class JsonParser : public JsonCallbacks, public Writer, public Closer {
+class JsonParser : public Writer, public Closer {
  public:
   JsonParser();
   ~JsonParser();
@@ -41,15 +44,15 @@ class JsonParser : public JsonCallbacks, public Writer, public Closer {
   void SetErrorFromStatus(ErrorPtr* error, yajl_status status,
                           const char* text, size_t length);
 
-  virtual int OnNull(JsonParser* p);
-  virtual int OnBool(JsonParser* p, bool value);
-  virtual int OnNumber(JsonParser* p, const char* s, size_t length);
-  virtual int OnString(JsonParser* p, const unsigned char* s, size_t length);
-  virtual int OnStartMap(JsonParser* p);
-  virtual int OnMapKey(JsonParser* p, const unsigned char* s, size_t length);
-  virtual int OnEndMap(JsonParser* p);
-  virtual int OnStartArray(JsonParser* p);
-  virtual int OnEndArray(JsonParser* p);
+  int OnNull(JsonParser* p);
+  int OnBool(JsonParser* p, bool value);
+  int OnNumber(JsonParser* p, const char* s, size_t length);
+  int OnString(JsonParser* p, const unsigned char* s, size_t length);
+  int OnStartMap(JsonParser* p);
+  int OnMapKey(JsonParser* p, const unsigned char* s, size_t length);
+  int OnEndMap(JsonParser* p);
+  int OnStartArray(JsonParser* p);
+  int OnEndArray(JsonParser* p);
 
   JsonCallbacks* top_callbacks() {
     assert(!callbacks_stack_.empty());
@@ -89,6 +92,7 @@ class JsonParser : public JsonCallbacks, public Writer, public Closer {
 
   static yajl_callbacks s_callbacks;
   yajl_handle handle_;
+  ErrorPtr error_;
 
  private:
   std::vector<JsonCallbacks*> callbacks_stack_;

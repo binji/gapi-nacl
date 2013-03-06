@@ -29,46 +29,61 @@
   state_ = STATE_TOP; \
   return 1
 
-#define APPEND_INT_AND_RETURN(TYPE, IDENT, FUNC) { \
-  TYPE value = FUNC(&buffer[0], &endptr, 10); \
-  if (errno == ERANGE) return 0; \
-  data_->IDENT.push_back(value); } \
+#define CONVERT_AND_CHECK_INT(TYPE, FUNC, FUNC_TYPE) \
+  FUNC_TYPE value = FUNC(&buffer[0], &endptr, 10); \
+  if (endptr - &buffer[0] != length || \
+      errno == ERANGE || \
+      value < std::numeric_limits<TYPE>::min() || \
+      value > std::numeric_limits<TYPE>::max()) { \
+    if (error) error->reset(new MessageError("Error parsing integer")); \
+    return 0; \
+  }
+
+#define APPEND_INT_AND_RETURN(TYPE, IDENT, FUNC, FUNC_TYPE) { \
+  CONVERT_AND_CHECK_INT(TYPE, FUNC, FUNC_TYPE) \
+  data_->IDENT.push_back(static_cast<TYPE>(value)); } \
   return 1
 
 #define APPEND_INT32_AND_RETURN(IDENT) \
-  APPEND_INT_AND_RETURN(int32_t, IDENT, strtol)
+  APPEND_INT_AND_RETURN(int32_t, IDENT, strtol, long int)
 
 #define APPEND_UINT32_AND_RETURN(IDENT) \
-  APPEND_INT_AND_RETURN(uint32_t, IDENT, strtoul)
+  APPEND_INT_AND_RETURN(uint32_t, IDENT, strtoul, unsigned long int)
 
 #define APPEND_INT64_AND_RETURN(IDENT) \
-  APPEND_INT_AND_RETURN(int64_t, IDENT, strtoll)
+  APPEND_INT_AND_RETURN(int64_t, IDENT, strtoll, long long int)
 
 #define APPEND_UINT64_AND_RETURN(IDENT) \
-  APPEND_INT_AND_RETURN(uint64_t, IDENT, strtoull)
+  APPEND_INT_AND_RETURN(uint64_t, IDENT, strtoull, unsigned long long int)
 
-#define SET_INT_AND_RETURN(TYPE, IDENT, FUNC) { \
-  TYPE value = FUNC(&buffer[0], &endptr, 10); \
-  if (errno == ERANGE) return 0; \
-  data_->IDENT = value; } \
+#define SET_INT_AND_RETURN(TYPE, IDENT, FUNC, FUNC_TYPE) { \
+  CONVERT_AND_CHECK_INT(TYPE, FUNC, FUNC_TYPE) \
+  data_->IDENT = static_cast<TYPE>(value); } \
   state_ = STATE_TOP; \
   return 1
 
 #define SET_INT32_AND_RETURN(IDENT) \
-  SET_INT_AND_RETURN(int32_t, IDENT, strtol)
+  SET_INT_AND_RETURN(int32_t, IDENT, strtol, long int)
 
 #define SET_UINT32_AND_RETURN(IDENT) \
-  SET_INT_AND_RETURN(uint32_t, IDENT, strtoul)
+  SET_INT_AND_RETURN(uint32_t, IDENT, strtoul, unsigned long int)
 
 #define SET_INT64_AND_RETURN(IDENT) \
-  SET_INT_AND_RETURN(int64_t, IDENT, strtoll)
+  SET_INT_AND_RETURN(int64_t, IDENT, strtoll, long long int)
 
 #define SET_UINT64_AND_RETURN(IDENT) \
-  SET_INT_AND_RETURN(uint64_t, IDENT, strtoull)
+  SET_INT_AND_RETURN(uint64_t, IDENT, strtoull, unsigned long long int)
+
+#define CONVERT_AND_CHECK_FP(TYPE, FUNC) \
+  TYPE value = FUNC(&buffer[0], &endptr); \
+  if (endptr - &buffer[0] != length || \
+      errno == ERANGE) { \
+    if (error) error->reset(new MessageError("Error parsing floating point")); \
+    return 0; \
+  }
 
 #define APPEND_FP_AND_RETURN(TYPE, IDENT, FUNC) { \
-  TYPE value = FUNC(&buffer[0], &endptr); \
-  if (errno == ERANGE) return 0; \
+  CONVERT_AND_CHECK_FP(TYPE, FUNC) \
   data_->IDENT.push_back(value); } \
   return 1
 
@@ -79,8 +94,7 @@
   APPEND_FP_AND_RETURN(double, IDENT, strtod)
 
 #define SET_FP_AND_RETURN(TYPE, IDENT, FUNC) { \
-  TYPE value = FUNC(&buffer[0], &endptr); \
-  if (errno == ERANGE) return 0; \
+  CONVERT_AND_CHECK_FP(TYPE, FUNC) \
   data_->IDENT = value; } \
   state_ = STATE_TOP; \
   return 1

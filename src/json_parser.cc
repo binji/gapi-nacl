@@ -1,7 +1,7 @@
 #include "json_parser.h"
 
 JsonParser::JsonParser() {
-  // NULL => use the default alloc funcs (malloc, realloc, free).
+  // NULL => use the default C alloc funcs (malloc, realloc, free).
   handle_ = yajl_alloc(&s_callbacks, NULL, this);
 }
 
@@ -43,7 +43,7 @@ void JsonParser::SetErrorFromStatus(ErrorPtr* error, yajl_status status,
       break;
 
     case yajl_status_client_canceled:
-      error->reset(new MessageError("Client canceled."));
+      *error = error_;
       break;
 
     case yajl_status_error:
@@ -57,39 +57,39 @@ void JsonParser::SetErrorFromStatus(ErrorPtr* error, yajl_status status,
 }
 
 int JsonParser::OnNull(JsonParser* p) {
-  return top_callbacks()->OnNull(p);
+  return top_callbacks()->OnNull(p, &error_);
 }
 
 int JsonParser::OnBool(JsonParser* p, bool value) {
-  return top_callbacks()->OnBool(p, value);
+  return top_callbacks()->OnBool(p, value, &error_);
 }
 
 int JsonParser::OnNumber(JsonParser* p, const char* s, size_t length) {
-  return top_callbacks()->OnNumber(p, s, length);
+  return top_callbacks()->OnNumber(p, s, length, &error_);
 }
 
 int JsonParser::OnString(JsonParser* p, const unsigned char* s, size_t length) {
-  return top_callbacks()->OnString(p, s, length);
+  return top_callbacks()->OnString(p, s, length, &error_);
 }
 
 int JsonParser::OnStartMap(JsonParser* p) {
-  return top_callbacks()->OnStartMap(p);
+  return top_callbacks()->OnStartMap(p, &error_);
 }
 
 int JsonParser::OnMapKey(JsonParser* p, const unsigned char* s, size_t length) {
-  return top_callbacks()->OnMapKey(p, s, length);
+  return top_callbacks()->OnMapKey(p, s, length, &error_);
 }
 
 int JsonParser::OnEndMap(JsonParser* p) {
-  return top_callbacks()->OnEndMap(p);
+  return top_callbacks()->OnEndMap(p, &error_);
 }
 
 int JsonParser::OnStartArray(JsonParser* p) {
-  return top_callbacks()->OnStartArray(p);
+  return top_callbacks()->OnStartArray(p, &error_);
 }
 
 int JsonParser::OnEndArray(JsonParser* p) {
-  return top_callbacks()->OnEndArray(p);
+  return top_callbacks()->OnEndArray(p, &error_);
 }
 
 void JsonParser::PushCallbacks(JsonCallbacks* callbacks) {

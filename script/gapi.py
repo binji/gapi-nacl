@@ -247,6 +247,7 @@ SOURCE_HEAD = """\
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits>
 #include <vector>
 #include "json_parser.h"
 #include "json_parser_macros.h"
@@ -284,15 +285,15 @@ class {{sub_schema.cbtype}} : public JsonCallbacks {
   };
 
   explicit {{sub_schema.base_cbtype}}({{sub_schema.ctype}}* data);
-  virtual int OnNull(JsonParser* p);
-  virtual int OnBool(JsonParser* p, bool value);
-  virtual int OnNumber(JsonParser* p, const char* s, size_t length);
-  virtual int OnString(JsonParser* p, const unsigned char* s, size_t length);
-  virtual int OnStartMap(JsonParser* p);
-  virtual int OnMapKey(JsonParser* p, const unsigned char* s, size_t length);
-  virtual int OnEndMap(JsonParser* p);
-  virtual int OnStartArray(JsonParser* p);
-  virtual int OnEndArray(JsonParser* p);
+  virtual int OnNull(JsonParser* p, ErrorPtr* error);
+  virtual int OnBool(JsonParser* p, bool value, ErrorPtr* error);
+  virtual int OnNumber(JsonParser* p, const char* s, size_t length, ErrorPtr* error);
+  virtual int OnString(JsonParser* p, const unsigned char* s, size_t length, ErrorPtr* error);
+  virtual int OnStartMap(JsonParser* p, ErrorPtr* error);
+  virtual int OnMapKey(JsonParser* p, const unsigned char* s, size_t length, ErrorPtr* error);
+  virtual int OnEndMap(JsonParser* p, ErrorPtr* error);
+  virtual int OnStartArray(JsonParser* p, ErrorPtr* error);
+  virtual int OnEndArray(JsonParser* p, ErrorPtr* error);
 
  private:
   {{sub_schema.ctype}}* data_;
@@ -314,14 +315,15 @@ void Decode(Reader* src, {{sub_schema.ctype}}* out_data, ErrorPtr* error) {
       state_(STATE_NONE) {
 }
 
-int {{sub_schema.cbtype}}::OnNull(JsonParser* p) {
+int {{sub_schema.cbtype}}::OnNull(JsonParser* p, ErrorPtr* error) {
 [[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnNull()\\n");
 [[]]
+  if (error) error->reset(new MessageError("Unexpected null"));
   return 0;
 }
 
-int {{sub_schema.cbtype}}::OnBool(JsonParser* p, bool value) {
+int {{sub_schema.cbtype}}::OnBool(JsonParser* p, bool value, ErrorPtr* error) {
 [[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnBool(%d) %d\\n", value, state_);
 [[]]
@@ -335,14 +337,16 @@ int {{sub_schema.cbtype}}::OnBool(JsonParser* p, bool value) {
       SET_BOOL_AND_RETURN({{cident}});
 [[  ]]
     default:
+      if (error) error->reset(new MessageError("Unexpected bool"));
       return 0;
   }
 [[else:]]
+  if (error) error->reset(new MessageError("Unexpected bool"));
   return 0;
 [[]]
 }
 
-int {{sub_schema.cbtype}}::OnNumber(JsonParser* p, const char* s, size_t length) {
+int {{sub_schema.cbtype}}::OnNumber(JsonParser* p, const char* s, size_t length, ErrorPtr* error) {
 [[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnNumber(%.*s) %d\\n", static_cast<int>(length), s, state_);
 [[]]
@@ -366,14 +370,16 @@ int {{sub_schema.cbtype}}::OnNumber(JsonParser* p, const char* s, size_t length)
       {{prefix}}_DOUBLE_AND_RETURN({{cident}});
 [[  ]]
     default:
+      if (error) error->reset(new MessageError("Unexpected number"));
       return 0;
   }
 [[else:]]
+  if (error) error->reset(new MessageError("Unexpected number"));
   return 0;
 [[]]
 }
 
-int {{sub_schema.cbtype}}::OnString(JsonParser* p, const unsigned char* s, size_t length) {
+int {{sub_schema.cbtype}}::OnString(JsonParser* p, const unsigned char* s, size_t length, ErrorPtr* error) {
 [[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnString(%.*s) %d\\n", static_cast<int>(length), s, state_);
 [[]]
@@ -397,14 +403,16 @@ int {{sub_schema.cbtype}}::OnString(JsonParser* p, const unsigned char* s, size_
       {{prefix}}_STRING_AND_RETURN({{cident}});
 [[  ]]
     default:
+      if (error) error->reset(new MessageError("Unexpected string"));
       return 0;
   }
 [[else:]]
+  if (error) error->reset(new MessageError("Unexpected string"));
   return 0;
 [[]]
 }
 
-int {{sub_schema.cbtype}}::OnStartMap(JsonParser* p) {
+int {{sub_schema.cbtype}}::OnStartMap(JsonParser* p, ErrorPtr* error) {
 [[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnStartMap() %d\\n", state_);
 [[]]
@@ -427,11 +435,12 @@ int {{sub_schema.cbtype}}::OnStartMap(JsonParser* p) {
       PUSH_CALLBACK_OBJECT_AND_RETURN({{ctype}}, {{cbtype}}, {{cident}});
 [[]]
     default:
+      if (error) error->reset(new MessageError("Unexpected state"));
       return 0;
   }
 }
 
-int {{sub_schema.cbtype}}::OnMapKey(JsonParser* p, const unsigned char* s, size_t length) {
+int {{sub_schema.cbtype}}::OnMapKey(JsonParser* p, const unsigned char* s, size_t length, ErrorPtr* error) {
 [[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnMapKey(%.*s) %d\\n", static_cast<int>(length), s, state_);
 [[]]
@@ -444,21 +453,27 @@ int {{sub_schema.cbtype}}::OnMapKey(JsonParser* p, const unsigned char* s, size_
 [[  for prop_name, next_state in group:]]
       CHECK_MAP_KEY("{{prop_name}}", {{len(prop_name)}}, {{next_state}});
 [[  ]]
+      if (error) error->reset(new MessageError("Unknown map key"));
       return 0;
 [[]]
     default:
+      if (error) error->reset(new MessageError("Unknown map key"));
       return 0;
   }
 }
 
-int {{sub_schema.cbtype}}::OnEndMap(JsonParser* p) {
+int {{sub_schema.cbtype}}::OnEndMap(JsonParser* p, ErrorPtr* error) {
 [[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnEndMap() %d\\n", state_);
 [[]]
-  return p->PopCallbacks() ? 1 : 0;
+  if (!p->PopCallbacks()) {
+    if (error) error->reset(new MessageError("Unexpected end of map"));
+    return 0;
+  }
+  return 1;
 }
 
-int {{sub_schema.cbtype}}::OnStartArray(JsonParser* p) {
+int {{sub_schema.cbtype}}::OnStartArray(JsonParser* p, ErrorPtr* error) {
 [[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnStartArray() %d\\n", state_);
 [[]]
@@ -470,14 +485,16 @@ int {{sub_schema.cbtype}}::OnStartArray(JsonParser* p) {
       return 1;
 [[  ]]
     default:
+      if (error) error->reset(new MessageError("Unexpected array"));
       return 0;
   }
 [[else:]]
+  if (error) error->reset(new MessageError("Unexpected array"));
   return 0;
 [[]]
 }
 
-int {{sub_schema.cbtype}}::OnEndArray(JsonParser* p) {
+int {{sub_schema.cbtype}}::OnEndArray(JsonParser* p, ErrorPtr* error) {
 [[if self.options.debug:]]
   printf("{{sub_schema.cbtype}}::OnEndArray() %d\\n", state_);
 [[]]
@@ -489,9 +506,11 @@ int {{sub_schema.cbtype}}::OnEndArray(JsonParser* p) {
       return 1;
 [[  ]]
     default:
+      if (error) error->reset(new MessageError("Unexpected end of array"));
       return 0;
   }
 [[else:]]
+  if (error) error->reset(new MessageError("Unexpected end of array"));
   return 0;
 [[]]
 }
