@@ -1,0 +1,22 @@
+{
+ "id": "urlshortener:v1",
+ "name": "urlshortener",
+ "version": "v1",
+ "schemas": {
+  "StringCount": {
+   "id": "StringCount",
+   "type": "object",
+   "properties": {
+    "count": {
+     "type": "string",
+     "description": "Number of clicks for this top entry, e.g. for this particular country or browser.",
+     "format": "int64"
+    },
+    "id": {
+     "type": "string",
+     "description": "Label assigned to this top entry, e.g. \"US\" or \"Chrome\"."
+    }
+   }
+  }
+ }
+}

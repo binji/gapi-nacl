@@ -4,6 +4,7 @@ import copy
 import cStringIO
 import itertools
 import json
+import optparse
 import os
 import re
 import sys
@@ -136,6 +137,7 @@ HEADER_HEAD = """\
 #ifndef {{include_guard}}
 #define {{include_guard}}
 
+#include <stdint.h>
 #include <map>
 #include <tr1/memory>
 #include <vector>
@@ -143,6 +145,10 @@ HEADER_HEAD = """\
 
 #include "error.h"
 #include "io.h"
+
+[[if self.namespace:]]
+namespace {{self.namespace}} {
+[[]]
 
 [[for schema in self.toplevel_schemas:]]
 struct {{schema}};
@@ -155,6 +161,10 @@ void Decode(Reader* src, {{schema}}* out_data, ErrorPtr* error);
 """
 
 HEADER_FOOT = """\
+[[if self.namespace:]]
+}  // namespace {{self.namespace}}
+
+[[]]
 #endif  // {{include_guard}}
 """
 
@@ -168,8 +178,10 @@ HEADER_SCHEMA_FOOT = """\
 """
 
 class CHeaderService(Service):
-  def __init__(self, service):
+  def __init__(self, service, outfname, namespace):
     self.f = cStringIO.StringIO()
+    self.outfname = outfname
+    self.namespace = namespace
     self.indent = ''
     self.prop_stack = []
     self.schema_stack = []
@@ -177,8 +189,8 @@ class CHeaderService(Service):
     super(CHeaderService, self).__init__(service)
 
   def EndService(self, name, version):
-    with open('out/%s_%s.h' % (name, version), 'w') as outf:
-      include_guard = gapi_utils.MakeIncludeGuard(name, version)
+    with open(self.outfname, 'w') as outf:
+      include_guard = gapi_utils.MakeIncludeGuard(self.outfname)
       outf.write(RunTemplateString(HEADER_HEAD, vars()))
       outf.write(self.f.getvalue())
       outf.write(RunTemplateString(HEADER_FOOT, vars()))
@@ -239,9 +251,17 @@ SOURCE_HEAD = """\
 #include "json_parser.h"
 #include "json_parser_macros.h"
 
+
+[[if self.namespace:]]
+namespace {{self.namespace}} {
+
+[[]]
 """
 
 SOURCE_FOOT = """\
+[[if self.namespace:]]
+}  // namespace {{self.namespace}}
+[[]]
 """
 
 SOURCE_SCHEMA_DECL = """\
@@ -317,7 +337,7 @@ int {{sub_schema.cbtype}}::OnBool(JsonParser* p, bool value) {
 }
 
 int {{sub_schema.cbtype}}::OnNumber(JsonParser* p, const char* s, size_t length) {
-  printf("{{sub_schema.cbtype}}::OnNumber(%.*s) %d\\n", length, s, state_);
+  printf("{{sub_schema.cbtype}}::OnNumber(%.*s) %d\\n", static_cast<int>(length), s, state_);
 [[if sub_schema.number_states:]]
   char* endptr;
   char buffer[32];
@@ -344,7 +364,7 @@ int {{sub_schema.cbtype}}::OnNumber(JsonParser* p, const char* s, size_t length)
 }
 
 int {{sub_schema.cbtype}}::OnString(JsonParser* p, const unsigned char* s, size_t length) {
-  printf("{{sub_schema.cbtype}}::OnString(%.*s) %d\\n", length, s, state_);
+  printf("{{sub_schema.cbtype}}::OnString(%.*s) %d\\n", static_cast<int>(length), s, state_);
 [[if sub_schema.string_states:]]
 [[  if any(ctype in ("int64_t", "uint64_t") for _,(_, ctype, _) in sub_schema.string_states.iteritems()):]]
   char* endptr;
@@ -396,7 +416,7 @@ int {{sub_schema.cbtype}}::OnStartMap(JsonParser* p) {
 }
 
 int {{sub_schema.cbtype}}::OnMapKey(JsonParser* p, const unsigned char* s, size_t length) {
-  printf("{{sub_schema.cbtype}}::OnMapKey(%.*s) %d\\n", length, s, state_);
+  printf("{{sub_schema.cbtype}}::OnMapKey(%.*s) %d\\n", static_cast<int>(length), s, state_);
   if (length == 0) return 0;
   switch (s[0]) {
 [[for first_char, group in groupby(sorted(sub_schema.props), lambda p:p[0][0]):]]
@@ -484,7 +504,10 @@ class SchemaInfo(object):
 
 
 class CSourceService(Service):
-  def __init__(self, service):
+  def __init__(self, service, outfname, headerfname, namespace):
+    self.outfname = outfname
+    self.namespace = namespace
+    self.headerfname = headerfname
     self.schema_stack = [SchemaInfo()]
     super(CSourceService, self).__init__(service)
 
@@ -531,8 +554,8 @@ class CSourceService(Service):
     pass
 
   def EndService(self, name, version):
-    with open('out/%s_%s.cc' % (name, version), 'w') as outf:
-      header = '%s_%s.h' % (name, version)
+    with open(self.outfname, 'w') as outf:
+      header = self.headerfname
       outf.write(RunTemplateString(SOURCE_HEAD, vars()))
       outf.write(self.schema.decf.getvalue())
       outf.write(self.schema.deff.getvalue())
@@ -621,12 +644,34 @@ def ReadCachedJson(url, filename):
 
 
 def main(args):
-  d = ReadCachedJson(DISCOVERY_API, API_JSON)
-  for item in d['items']:
-    json_name = 'out/%s_%s.json' % (item['name'], item['version'])
-    service = ReadCachedJson(item['discoveryRestUrl'], json_name)
-    CHeaderService(service)
-    CSourceService(service)
+  parser = optparse.OptionParser()
+  parser.add_option('-o', dest='outbasename')
+  parser.add_option('-n', '--namespace')
+  options, args = parser.parse_args(args)
+
+  if args:
+    if len(args) > 1:
+      print 'Ignoring additional args: %s' % ', '.join(args[1:])
+    if not options.outbasename:
+      parser.error('no output file given.')
+    with open(args[0]) as inf:
+      service = json.load(inf)
+    basename = options.outbasename
+    header_name = basename + '.h'
+    source_name = basename + '.cc'
+    CHeaderService(service, header_name, options.namespace)
+    CSourceService(service, source_name, header_name, options.namespace)
+  else:
+    # Read and generate for all descovery APIs.
+    d = ReadCachedJson(DISCOVERY_API, API_JSON)
+    for item in d['items']:
+      basename = 'out/%s_%s' % (item['name'], item['version'])
+      json_name = basename + '.json'
+      header_name = basename + '.h'
+      source_name = basename + '.cc'
+      service = ReadCachedJson(item['discoveryRestUrl'], json_name)
+      CHeaderService(service, header_name, options.namespace)
+      CSourceService(service, source_name, header_name, options.namespace)
 
 
 if __name__ == '__main__':

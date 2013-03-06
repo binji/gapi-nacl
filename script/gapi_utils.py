@@ -34,9 +34,9 @@ def MakeCIdentifier(s):
   return re.sub(r'\W', '_', s)
 
 
-def MakeIncludeGuard(name, version):
+def MakeIncludeGuard(filename):
   "name_version -> NAME_VERSION_H_"
-  return re.sub(r'\W', '_', name.upper() + '_' + version.upper() + '_H_')
+  return re.sub(r'\W', '_', filename.upper() + '_')
 
 
 def SnakeCase(s):

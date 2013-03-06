@@ -1,0 +1,329 @@
+{
+ "kind": "urlshortener#url",
+ "id": "http://goo.gl/Lv6ph",
+ "longUrl": "http://googlecode.blogspot.com/2011/01/google-url-shortener-gets-api.html",
+ "status": "OK",
+ "created": "2011-01-10T21:53:35.812+00:00",
+ "analytics": {
+  "allTime": {
+   "shortUrlClicks": "10073",
+   "longUrlClicks": "10748",
+   "referrers": [
+    {
+     "count": "6382",
+     "id": "Unknown/empty"
+    },
+    {
+     "count": "3034",
+     "id": "twitter.com"
+    },
+    {
+     "count": "82",
+     "id": "mobile.twitter.com"
+    },
+    {
+     "count": "64",
+     "id": "www.akamarketing.com"
+    },
+    {
+     "count": "45",
+     "id": "hootsuite.com"
+    },
+    {
+     "count": "41",
+     "id": "www.facebook.com"
+    },
+    {
+     "count": "40",
+     "id": "www.google.com"
+    },
+    {
+     "count": "36",
+     "id": "iconfactory.com"
+    },
+    {
+     "count": "34",
+     "id": "d.seesmic.com"
+    },
+    {
+     "count": "24",
+     "id": "www.briefing.com"
+    }
+   ],
+   "countries": [
+    {
+     "count": "3253",
+     "id": "US"
+    },
+    {
+     "count": "1076",
+     "id": "GB"
+    },
+    {
+     "count": "357",
+     "id": "BR"
+    },
+    {
+     "count": "329",
+     "id": "DE"
+    },
+    {
+     "count": "327",
+     "id": "CA"
+    },
+    {
+     "count": "313",
+     "id": "FR"
+    },
+    {
+     "count": "272",
+     "id": "ES"
+    },
+    {
+     "count": "254",
+     "id": "IN"
+    },
+    {
+     "count": "227",
+     "id": "NL"
+    },
+    {
+     "count": "129",
+     "id": "AU"
+    }
+   ],
+   "browsers": [
+    {
+     "count": "3448",
+     "id": "Chrome"
+    },
+    {
+     "count": "2649",
+     "id": "Firefox"
+    },
+    {
+     "count": "1167",
+     "id": "Safari"
+    },
+    {
+     "count": "978",
+     "id": "Mobile"
+    },
+    {
+     "count": "876",
+     "id": "Internet Explorer"
+    },
+    {
+     "count": "240",
+     "id": "RockMelt"
+    },
+    {
+     "count": "184",
+     "id": "Opera"
+    },
+    {
+     "count": "175",
+     "id": "Konqueror"
+    },
+    {
+     "count": "75",
+     "id": "Ubuntu"
+    },
+    {
+     "count": "54",
+     "id": "Namoroka"
+    }
+   ],
+   "platforms": [
+    {
+     "count": "5223",
+     "id": "Windows"
+    },
+    {
+     "count": "1935",
+     "id": "Macintosh"
+    },
+    {
+     "count": "773",
+     "id": "Linux"
+    },
+    {
+     "count": "765",
+     "id": "Other Unix"
+    },
+    {
+     "count": "681",
+     "id": "iPhone"
+    },
+    {
+     "count": "278",
+     "id": "iPad"
+    },
+    {
+     "count": "149",
+     "id": "Windows NT 6.1"
+    },
+    {
+     "count": "78",
+     "id": "iPod"
+    },
+    {
+     "count": "62",
+     "id": "BlackBerry"
+    },
+    {
+     "count": "39",
+     "id": "Nokia"
+    }
+   ]
+  },
+  "month": {
+   "shortUrlClicks": "114",
+   "longUrlClicks": "114",
+   "referrers": [
+    {
+     "count": "114",
+     "id": "Unknown/empty"
+    }
+   ],
+   "countries": [
+    {
+     "count": "104",
+     "id": "US"
+    },
+    {
+     "count": "2",
+     "id": "MX"
+    },
+    {
+     "count": "1",
+     "id": "DE"
+    },
+    {
+     "count": "1",
+     "id": "IT"
+    },
+    {
+     "count": "1",
+     "id": "MD"
+    },
+    {
+     "count": "1",
+     "id": "ZA"
+    }
+   ],
+   "browsers": [
+    {
+     "count": "93",
+     "id": "Chrome"
+    },
+    {
+     "count": "9",
+     "id": "Firefox"
+    },
+    {
+     "count": "8",
+     "id": "Namoroka"
+    },
+    {
+     "count": "2",
+     "id": "Internet Explorer"
+    },
+    {
+     "count": "1",
+     "id": "Opera"
+    }
+   ],
+   "platforms": [
+    {
+     "count": "104",
+     "id": "Windows"
+    },
+    {
+     "count": "8",
+     "id": "Macintosh"
+    },
+    {
+     "count": "1",
+     "id": "BlackBerry"
+    }
+   ]
+  },
+  "week": {
+   "shortUrlClicks": "5",
+   "longUrlClicks": "5",
+   "referrers": [
+    {
+     "count": "5",
+     "id": "Unknown/empty"
+    }
+   ],
+   "countries": [
+    {
+     "count": "3",
+     "id": "US"
+    },
+    {
+     "count": "1",
+     "id": "IT"
+    }
+   ],
+   "browsers": [
+    {
+     "count": "3",
+     "id": "Chrome"
+    },
+    {
+     "count": "1",
+     "id": "Firefox"
+    },
+    {
+     "count": "1",
+     "id": "Opera"
+    }
+   ],
+   "platforms": [
+    {
+     "count": "2",
+     "id": "Macintosh"
+    },
+    {
+     "count": "2",
+     "id": "Windows"
+    }
+   ]
+  },
+  "day": {
+   "shortUrlClicks": "1",
+   "longUrlClicks": "1",
+   "referrers": [
+    {
+     "count": "1",
+     "id": "Unknown/empty"
+    }
+   ],
+   "countries": [
+    {
+     "count": "1",
+     "id": "US"
+    }
+   ],
+   "browsers": [
+    {
+     "count": "1",
+     "id": "Chrome"
+    }
+   ],
+   "platforms": [
+    {
+     "count": "1",
+     "id": "Macintosh"
+    }
+   ]
+  },
+  "twoHours": {
+   "shortUrlClicks": "0",
+   "longUrlClicks": "0"
+  }
+ }
+}

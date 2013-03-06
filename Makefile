@@ -18,4 +18,8 @@ runclean: all
 run: all
 	@${CHROME_PATH} ${NEXE_ARGS}
 
-.PHONY: all clean runclean run
+test: build.ninja
+	@ninja out/gapi_test_host
+	@./out/gapi_test_host
+
+.PHONY: all clean runclean run test

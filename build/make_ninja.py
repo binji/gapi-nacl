@@ -82,6 +82,10 @@ def PathToLibname(p):
   assert(basename.startswith('lib'))
   return basename[3:]
 
+def FilenameToNamespace(f):
+  basename = os.path.splitext(os.path.basename(f))[0]
+  return basename.lower()
+
 
 MAKE_NINJA = os.path.relpath(__file__, ROOT_DIR)
 YAJL_SOURCE_FILES = [
@@ -95,12 +99,23 @@ YAJL_SOURCE_FILES = [
   'third_party/yajl/src/yajl_tree.c',
   'third_party/yajl/src/yajl_version.c',
 ]
-SOURCE_FILES = [
+GTEST_SOURCE_FILES = [
+  'third_party/gtest/src/gtest-all.cc',
+]
+GAPI_SOURCE_FILES = [
   'src/error.cc',
-  'src/gapi.cc',
   'src/io.cc',
   'src/json_parser.cc',
-  'src/urlshortener_v1.cc',
+]
+TEST_SOURCE_FILES = [
+  'src/test/main.cc',
+  'out/gen/src/test/data/test1.cc',
+]
+TEST_GEN_FILES = [
+  'src/test/data/test1.json',
+]
+SOURCE_FILES = [
+  'src/gapi.cc',
 ]
 
 DATA_FILES = [
@@ -112,10 +127,10 @@ DST_DATA_FILES = Repath('out', DATA_FILES)
 
 
 BUILT_FILES = [
-  'out/gapi_test.nmf',
-  'out/gapi_test_x86_32.nexe',
-  'out/gapi_test_x86_64.nexe',
-  'out/gapi_test_arm.nexe',
+  'out/gapi_nexe_test.nmf',
+  'out/gapi_nexe_test_x86_32.nexe',
+  'out/gapi_nexe_test_x86_64.nexe',
+  'out/gapi_nexe_test_arm.nexe',
 ]
 
 
@@ -173,6 +188,9 @@ def main():
   w.variable('cc-arm', Path('$toolchain_dir_arm/bin/arm-nacl-gcc'))
   w.variable('cxx-arm', Path('$toolchain_dir_arm/bin/arm-nacl-g++'))
   w.variable('ar-arm', Path('$toolchain_dir_arm/bin/arm-nacl-ar'))
+  w.variable('cc-host', 'gcc')
+  w.variable('cxx-host', 'g++')
+  w.variable('ar-host', 'ar')
 
   if WINDOWS:
     cmd = Python('script/cp.py $in $out')
@@ -183,7 +201,7 @@ def main():
   Code(w)
   Data(w)
   Package(w)
-  w.default(' '.join(map(Path, ['out/gapi_test.nmf'] + DST_DATA_FILES)))
+  w.default(' '.join(map(Path, ['out/gapi_nexe_test.nmf'] + DST_DATA_FILES)))
 
   # Don't write build.ninja until everything succeeds
   with open(out_filename, 'w') as f:
@@ -197,13 +215,14 @@ def BuildProject(w, name, rule, sources, **kwargs):
   order_only = kwargs.get('order_only', None)
   proj_ccflags = kwargs.get('ccflags', [])
   proj_cxxflags = kwargs.get('cxxflags', [])
+  arches = kwargs.get('arches', ['x86_32', 'x86_64', 'arm', 'host'])
 
   libfiles = [l for l in libs if os.path.dirname(l)]
   libnames = [l for l in libs if not os.path.dirname(l)]
   libdirs = sorted(set([os.path.dirname(l) for l in libfiles]))
   libs = [PathToLibname(l) for l in libfiles] + libnames
 
-  for arch in ('x86_32', 'x86_64', 'arm'):
+  for arch in arches:
     arch_incdirs = Prefix('-I', [x.format(**vars()) for x in includedirs])
     arch_libdirs = Prefix('-L', [x.format(**vars()) for x in libdirs])
     arch_libs = Prefix('-l', [x.format(**vars()) for x in libs])
@@ -238,7 +257,10 @@ def BuildProject(w, name, rule, sources, **kwargs):
               variables={'ccflags': ccflags, 'cc': cc})
 
     if rule == 'link':
-      out_name = 'out/{name}_{arch}.nexe'.format(**vars())
+      if arch == 'host':
+        out_name = 'out/{name}_{arch}'.format(**vars())
+      else:
+        out_name = 'out/{name}_{arch}.nexe'.format(**vars())
       variables= {'ldflags': '$' + ldflags_name, 'cc': '$cxx-' + arch}
     elif rule == 'ar':
       out_name = 'out/{name}_{arch}.a'.format(**vars())
@@ -259,6 +281,10 @@ def Code(w):
   w.rule('link',
       command='$cc $in $ldflags -o $out',
       description='LINK $out')
+
+  w.rule('gapi-gen',
+      command='./script/gapi.py $in -o $outbase $flags',
+      description='GAPI-GEN $out')
 
 #  w.variable('base_ccflags', '-g')
 #  w.variable('base_cxxflags', '-g -std=c++0x')
@@ -286,13 +312,58 @@ def Code(w):
     ccflags=['-std=c99'])
 
   BuildProject(
+    w, 'libgtest', 'ar',
+    GTEST_SOURCE_FILES,
+    includedirs=[
+      'third_party/gtest/include',
+      'third_party/gtest',
+    ])
+
+  BuildProject(
+    w, 'libgapi', 'ar',
+    GAPI_SOURCE_FILES,
+    includedirs=[
+      'src',
+      'out'
+    ])
+
+  gen_cc_h = []
+  for name in TEST_GEN_FILES:
+    outbase = os.path.join('out/gen', os.path.splitext(name)[0])
+    outs = [outbase + ext for ext in ('.h', '.cc')]
+    w.build(outs, 'gapi-gen', name, implicit='script/gapi.py',
+        variables={'outbase': outbase,
+                   'flags': '-n %s' % FilenameToNamespace(name)})
+    gen_cc_h.extend(outs)
+
+  BuildProject(
     w, 'gapi_test', 'link',
+    TEST_SOURCE_FILES,
+    arches=['host'],
+    includedirs=[
+      '.',
+      'src',
+      'out',
+      'third_party/gtest/include',
+    ],
+    order_only=gen_cc_h,
+    libs=[
+      'out/libgapi_{arch}.a',
+      'out/libgtest_{arch}.a',
+      'out/libyajl_{arch}.a',
+      'pthread',
+    ])
+
+  BuildProject(
+    w, 'gapi_nexe_test', 'link',
     SOURCE_FILES,
+    arches=['x86_32', 'x86_64', 'arm'],
     includedirs=[
       'src',
       'out',
       '$nacl_sdk_root/include'],
     libs=[
+      'out/libgapi_{arch}.a',
       'out/libyajl_{arch}.a',
       'ppapi_cpp',
       'ppapi'])
@@ -302,10 +373,10 @@ def Code(w):
       command='$nmf $in -o $out',
       description='NMF $out')
   w.variable('nmf', Python('$nacl_sdk_root/tools/create_nmf.py'))
-  w.build('out/gapi_test.nmf', 'nmf', [
-    'out/gapi_test_x86_32.nexe',
-    'out/gapi_test_x86_64.nexe',
-    'out/gapi_test_arm.nexe'])
+  w.build('out/gapi_nexe_test.nmf', 'nmf', [
+    'out/gapi_nexe_test_x86_32.nexe',
+    'out/gapi_nexe_test_x86_64.nexe',
+    'out/gapi_nexe_test_arm.nexe'])
 
 
 def Data(w):
