@@ -1,26 +1,26 @@
 #include "gtest/gtest.h"
 #include "io.h"
 #include "json_parser.h"
-#include "out/gen/src/test/data/schema1.h"
-#include "out/gen/src/test/data/schema2.h"
-#include "out/gen/src/test/data/schema3.h"
+#include "out/gen/src/test/data/simple_schema.h"
+#include "out/gen/src/test/data/urlshortener_schema.h"
+#include "out/gen/src/test/data/test_types_schema.h"
 
-TEST(GenTest1, TestParse) {
-  schema1::StringCount data;
+TEST(SimpleSchemaTest, TestParse) {
+  simple_schema::StringCount data;
   char buffer[] = "{\"id\": \"foobar\", \"count\": \"123456\"}";
   MemoryReader reader(&buffer[0], strlen(buffer));
   ErrorPtr error;
-  schema1::Decode(&reader, &data, &error);
+  simple_schema::Decode(&reader, &data, &error);
   ASSERT_EQ(NULL, error.get()) << "Decode error: " << error->ToString();
   EXPECT_STREQ("foobar", data.id.c_str());
   EXPECT_EQ(123456, data.count);
 }
 
-TEST(GenTest2, TestParse) {
-  schema2::Url data;
-  FileReader reader("test2_response.json");
+TEST(UrlshortenerSchemaTest, TestParse) {
+  urlshortener_schema::Url data;
+  FileReader reader("urlshortener_response.json");
   ErrorPtr error;
-  schema2::Decode(&reader, &data, &error);
+  urlshortener_schema::Decode(&reader, &data, &error);
   ASSERT_EQ(NULL, error.get()) << "Decode error: " << error->ToString();
 
   // Test a few values...
@@ -34,11 +34,11 @@ TEST(GenTest2, TestParse) {
   EXPECT_STREQ("Chrome", data.analytics->all_time->browsers[0]->id.c_str());
 }
 
-TEST(GenTest3, TestTypes) {
-  schema3::Types data;
-  FileReader reader("test3_types1.json");
+TEST(TypesTest, TestParse) {
+  test_types_schema::Types data;
+  FileReader reader("test_types_data.json");
   ErrorPtr error;
-  schema3::Decode(&reader, &data, &error);
+  test_types_schema::Decode(&reader, &data, &error);
   ASSERT_EQ(NULL, error.get()) << "Decode error: " << error->ToString();
 
   EXPECT_EQ(-1234, data.my_int32);

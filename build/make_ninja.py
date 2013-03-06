@@ -109,14 +109,14 @@ GAPI_SOURCE_FILES = [
 ]
 TEST_SOURCE_FILES = [
   'src/test/main.cc',
-  'out/gen/src/test/data/schema1.cc',
-  'out/gen/src/test/data/schema2.cc',
-  'out/gen/src/test/data/schema3.cc',
+  'out/gen/src/test/data/simple_schema.cc',
+  'out/gen/src/test/data/urlshortener_schema.cc',
+  'out/gen/src/test/data/test_types_schema.cc',
 ]
 TEST_GEN_FILES = [
-  'src/test/data/schema1.json',
-  'src/test/data/schema2.json',
-  'src/test/data/schema3.json',
+  'src/test/data/simple_schema.json',
+  'src/test/data/urlshortener_schema.json',
+  'src/test/data/test_types_schema.json',
 ]
 SOURCE_FILES = [
   'src/gapi.cc',
