@@ -65,6 +65,21 @@ TEST(TypesTest, TestFailures) {
     { "{\"myInt32\": \"\"}", "Unexpected string" },
     { "{\"myInt32\": 3.5}", "Error parsing integer" },
     { "{\"myInt32\": 123456789012}", "Error parsing integer" },
+    { "{\"myUint32\": -1}", "Error parsing integer" },
+    { "{\"myInt64\": foo}", "invalid string in json text" },
+    { "{\"myInt64\": 1234}", "Unexpected number" },
+    { "{\"myInt64\": \"1234a\"}", "Error parsing integer" },
+    { "{\"myInt64\": \"10000000000000000000\"}", "Error parsing integer" },
+    { "{\"myUint64\": \"-1\"}", "Error parsing integer" },
+    { "{\"myFloat\": \"1.5\"}", "Unexpected string" },
+    { "{\"myFloat\": 1e40}", "Error parsing floating point" },
+    { "{\"myDouble\": 1e400}", "Error parsing floating point" },
+    { "{\"myString\": true}", "Unexpected bool" },
+    { "{\"myBool\": 1}", "Unexpected number" },
+    { "{\"myBool\": \"true\"}", "Unexpected string" },
+    { "{\"myRef\": null}", "Unexpected null" },
+    { "{\"myObject\": null}", "Unexpected null" },
+    { "{\"myObject\": {\"badProperty\": 123}}", "Unknown map key" },
   };
 
   for (int i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]); ++i) {
@@ -74,8 +89,9 @@ TEST(TypesTest, TestFailures) {
     ErrorPtr error;
     test_types_schema::Decode(&reader, &data, &error);
     ASSERT_TRUE(error.get() != NULL) << "Expected error for testcase: " << json;
-    EXPECT_STREQ(test_cases[i].error, error->ToString().c_str())
-        << "Testcase: " << json;
+    EXPECT_TRUE(strstr(error->ToString().c_str(), test_cases[i].error) != NULL)
+        << "Expected error to be: " << test_cases[i].error << "\n"
+        << "Actual error: " << error->ToString();
   }
 }
 
