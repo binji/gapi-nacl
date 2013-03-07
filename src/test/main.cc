@@ -115,6 +115,62 @@ TEST(ArrayTypesTest, TestParse) {
   ASSERT_EQ(3, data.my_bool_array.size());
   ASSERT_EQ(2, data.my_ref_array.size());
   ASSERT_EQ(3, data.my_object_array.size());
+
+  EXPECT_EQ(-1234, data.my_int32_array[0]);
+  EXPECT_EQ(456, data.my_int32_array[1]);
+  EXPECT_EQ(1234, data.my_uint32_array[0]);
+  EXPECT_EQ(45100, data.my_uint32_array[1]);
+  EXPECT_EQ(23, data.my_uint32_array[2]);
+  EXPECT_EQ(-3123456789, data.my_int64_array[0]);
+  EXPECT_FLOAT_EQ(1.0, data.my_float_array[0]);
+  EXPECT_FLOAT_EQ(2.0, data.my_float_array[1]);
+  EXPECT_FLOAT_EQ(3.0, data.my_float_array[2]);
+  EXPECT_DOUBLE_EQ(-5.6, data.my_double_array[0]);
+  EXPECT_DOUBLE_EQ(4.5, data.my_double_array[1]);
+  EXPECT_DOUBLE_EQ(100.3, data.my_double_array[2]);
+  EXPECT_FALSE(data.my_bool_array[0]);
+  EXPECT_FALSE(data.my_bool_array[1]);
+  EXPECT_TRUE(data.my_bool_array[2]);
+  ASSERT_TRUE(data.my_ref_array[0].get() != NULL);
+  ASSERT_TRUE(data.my_ref_array[1].get() != NULL);
+  EXPECT_STREQ("First", data.my_ref_array[0]->value1.c_str());
+  EXPECT_EQ(1, data.my_ref_array[0]->value2);
+  EXPECT_STREQ("Second", data.my_ref_array[1]->value1.c_str());
+  EXPECT_EQ(2, data.my_ref_array[1]->value2);
+  EXPECT_STREQ("1234", data.my_object_array[0].my_object_string.c_str());
+  EXPECT_FLOAT_EQ(1234, data.my_object_array[0].my_object_float);
+  EXPECT_STREQ("45.3", data.my_object_array[1].my_object_string.c_str());
+  EXPECT_FLOAT_EQ(45.3, data.my_object_array[1].my_object_float);
+  EXPECT_STREQ("1e9", data.my_object_array[2].my_object_string.c_str());
+  EXPECT_FLOAT_EQ(1e9, data.my_object_array[2].my_object_float);
+}
+
+TEST(ArrayTypesTest, TestFailures) {
+  struct TestCase {
+    const char* json;
+    const char* error;
+  };
+  TestCase test_cases[] = {
+    { "{\"myInt32Array\": [32, \"\"]}", "Unexpected string" },
+    { "{\"myInt32Array\": [3.5]}", "Unexpected characters at end of integer" },
+    { "{\"myInt32Array\": null}", "Unexpected null" },
+    // TODO(binji): better error for this: "int64 expects numbers in strings..."
+    { "{\"myInt64Array\": [\"1234\", 1234]}", "Unexpected number" },
+    { "{\"myBoolArray\": [true, false, 1]}", "Unexpected number" },
+  };
+
+  for (int i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]); ++i) {
+    const char* json = test_cases[i].json;
+    test_types_schema::ArrayTypes data;
+    MemoryReader reader(&json[0], strlen(json));
+    ErrorPtr error;
+    test_types_schema::Decode(&reader, &data, &error);
+    const char* error_message = error ? error->ToString().c_str() : "None";
+    EXPECT_TRUE(strstr(error_message, test_cases[i].error) != NULL)
+        << "For testcase: " << json << "\n"
+        << "Expected error to be: " << test_cases[i].error << "\n"
+        << "Actual error: " << error_message;
+  }
 }
 
 int main(int argc, char** argv) {

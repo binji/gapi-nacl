@@ -11,19 +11,15 @@ std::string MessageError::ToString() const {
 }
 
 YajlError::YajlError(yajl_handle handle, const char* text, size_t length,
-                     const char* extra_info)
-    : handle_(handle) {
-  yajl_message_ = reinterpret_cast<char*>(yajl_get_error(
-        handle, text && length,
-        reinterpret_cast<const unsigned char*>(text), length));
-  message_ = yajl_message_;
+                     const char* extra_info) {
+  unsigned char* yajl_message = yajl_get_error(
+      handle, text && length,
+      reinterpret_cast<const unsigned char*>(text), length);
+  message_ = reinterpret_cast<const char*>(yajl_message);
   if (extra_info) {
     message_ += extra_info;
   }
-}
-
-YajlError::~YajlError() {
-  yajl_free_error(handle_, reinterpret_cast<unsigned char*>(yajl_message_));
+  yajl_free_error(handle, yajl_message);
 }
 
 std::string YajlError::ToString() const {

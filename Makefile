@@ -22,4 +22,8 @@ test: build.ninja
 	@ninja out/gapi_test_host
 	@cd src/test/data && ../../../out/gapi_test_host
 
-.PHONY: all clean runclean run test
+debug_test: build.ninja
+	@ninja out/gapi_test_host
+	@cd src/test/data && gdb ../../../out/gapi_test_host
+
+.PHONY: all clean runclean run test debug_test
