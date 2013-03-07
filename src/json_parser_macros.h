@@ -30,12 +30,15 @@
   return 1
 
 #define CONVERT_AND_CHECK_INT(TYPE, FUNC, FUNC_TYPE) \
+  errno = 0; \
   FUNC_TYPE value = FUNC(&buffer[0], &endptr, 10); \
-  if (endptr - &buffer[0] != length || \
-      errno == ERANGE || \
+  if (endptr - &buffer[0] != length) { \
+    if (error) error->reset(new MessageError("Unexpected characters at end of integer")); \
+    return 0; \
+  } else if (errno == ERANGE || \
       value < std::numeric_limits<TYPE>::min() || \
       value > std::numeric_limits<TYPE>::max()) { \
-    if (error) error->reset(new MessageError("Error parsing integer")); \
+    if (error) error->reset(new MessageError("Integer value out of range")); \
     return 0; \
   }
 
@@ -75,10 +78,13 @@
   SET_INT_AND_RETURN(uint64_t, IDENT, strtoull, unsigned long long int)
 
 #define CONVERT_AND_CHECK_FP(TYPE, FUNC) \
+  errno = 0; \
   TYPE value = FUNC(&buffer[0], &endptr); \
-  if (endptr - &buffer[0] != length || \
-      errno == ERANGE) { \
-    if (error) error->reset(new MessageError("Error parsing floating point")); \
+  if (endptr - &buffer[0] != length) { \
+    if (error) error->reset(new MessageError("Unexpected characters at end of float")); \
+    return 0; \
+  } else if (errno == ERANGE) { \
+    if (error) error->reset(new MessageError("Float value out of range")); \
     return 0; \
   }
 

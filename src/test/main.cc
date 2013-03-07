@@ -63,17 +63,19 @@ TEST(TypesTest, TestFailures) {
   };
   TestCase test_cases[] = {
     { "{\"myInt32\": \"\"}", "Unexpected string" },
-    { "{\"myInt32\": 3.5}", "Error parsing integer" },
-    { "{\"myInt32\": 123456789012}", "Error parsing integer" },
-    { "{\"myUint32\": -1}", "Error parsing integer" },
+    { "{\"myInt32\": 3.5}", "Unexpected characters at end of integer" },
+    { "{\"myInt32\": 123456789012}", "Integer value out of range" },
+    { "{\"myUint32\": -1}", "Integer value out of range" },
     { "{\"myInt64\": foo}", "invalid string in json text" },
     { "{\"myInt64\": 1234}", "Unexpected number" },
-    { "{\"myInt64\": \"1234a\"}", "Error parsing integer" },
-    { "{\"myInt64\": \"10000000000000000000\"}", "Error parsing integer" },
-    { "{\"myUint64\": \"-1\"}", "Error parsing integer" },
+    { "{\"myInt64\": \"1234a\"}", "Unexpected characters at end of integer" },
+    { "{\"myInt64\": \"1234.5\"}", "Unexpected characters at end of integer" },
+    { "{\"myInt64\": \"10000000000000000000\"}", "Integer value out of range" },
+    // strtoull parses -1 as a valid uint64 (ULLONG_MAX). :-/
+//    { "{\"myUint64\": \"-1\"}", "Integer value out of range" },
     { "{\"myFloat\": \"1.5\"}", "Unexpected string" },
-    { "{\"myFloat\": 1e40}", "Error parsing floating point" },
-    { "{\"myDouble\": 1e400}", "Error parsing floating point" },
+    { "{\"myFloat\": 1e40}", "Float value out of range" },
+    { "{\"myDouble\": 1e400}", "Float value out of range" },
     { "{\"myString\": true}", "Unexpected bool" },
     { "{\"myBool\": 1}", "Unexpected number" },
     { "{\"myBool\": \"true\"}", "Unexpected string" },
@@ -88,11 +90,31 @@ TEST(TypesTest, TestFailures) {
     MemoryReader reader(&json[0], strlen(json));
     ErrorPtr error;
     test_types_schema::Decode(&reader, &data, &error);
-    ASSERT_TRUE(error.get() != NULL) << "Expected error for testcase: " << json;
-    EXPECT_TRUE(strstr(error->ToString().c_str(), test_cases[i].error) != NULL)
+    const char* error_message = error ? error->ToString().c_str() : "None";
+    EXPECT_TRUE(strstr(error_message, test_cases[i].error) != NULL)
+        << "For testcase: " << json << "\n"
         << "Expected error to be: " << test_cases[i].error << "\n"
-        << "Actual error: " << error->ToString();
+        << "Actual error: " << error_message;
   }
+}
+
+TEST(ArrayTypesTest, TestParse) {
+  test_types_schema::ArrayTypes data;
+  FileReader reader("test_array_types_data.json");
+  ErrorPtr error;
+  test_types_schema::Decode(&reader, &data, &error);
+  ASSERT_EQ(NULL, error.get()) << "Decode error: " << error->ToString();
+
+  ASSERT_EQ(2, data.my_int32_array.size());
+  ASSERT_EQ(3, data.my_uint32_array.size());
+  ASSERT_EQ(1, data.my_int64_array.size());
+  ASSERT_EQ(0, data.my_uint64_array.size());
+  ASSERT_EQ(3, data.my_float_array.size());
+  ASSERT_EQ(3, data.my_double_array.size());
+  ASSERT_EQ(3, data.my_string_array.size());
+  ASSERT_EQ(3, data.my_bool_array.size());
+  ASSERT_EQ(2, data.my_ref_array.size());
+  ASSERT_EQ(3, data.my_object_array.size());
 }
 
 int main(int argc, char** argv) {

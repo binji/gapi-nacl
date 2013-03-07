@@ -1,0 +1,28 @@
+{
+  "myInt32Array": [-1234, 456],
+  "myUint32Array": [1234, 45100, 23],
+  "myInt64Array": ["-3123456789"],
+  "myUint64Array": [],
+  "myFloatArray": [1.0, 2.0, 3.0],
+  "myDoubleArray": [-5.6, 4.5, 100.3],
+  "myStringArray": ["you", "are", "smart"],
+  "myBoolArray": [false, false, true],
+  "myRefArray": [{
+    "value1": "First",
+    "value2": 1
+  }, {
+    "value1": "Second",
+    "value2": 2
+  }],
+  "myObjectArray": [{
+    "myObjectString": "1234",
+    "myObjectFloat": 1234
+  }, {
+    "myObjectString": "45.3",
+    "myObjectFloat": 45.3
+  }, {
+    "myObjectString": "1e9",
+    "myObjectFloat": 1e9
+  }]
+}
+
