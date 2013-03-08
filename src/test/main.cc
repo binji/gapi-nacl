@@ -173,6 +173,44 @@ TEST(ArrayTypesTest, TestFailures) {
   }
 }
 
+TEST(ComplexTypesTest, TestParse) {
+  const char* test_cases[] = {
+    "{\"twoply\": []}",
+    "{\"twoply\": [[]]}",
+    "{\"twoply\": [[], [], [], [], []]}",
+    "{\"twoply\": [[1, 2]]}",
+    "{\"twoply\": [[1, 2], []]}",
+    "{\"twoply\": [[1, 2], [3, 4]]}",
+    "{\"twoply\": [[1], [3], [5], [7]]}",
+    "{\"threeply\": []}",
+    "{\"threeply\": [[]]}",
+    "{\"threeply\": [[[]]]}",
+    "{\"threeply\": [[],[]]}",
+    "{\"threeply\": [[],[],[[]]]}",
+    "{\"threeply\": [[[1],[2],[3]],[[4],[5],[6]],[[7],[8],[9]]]}",
+    "{\"twoplyObjects\": [[{\"x\": 1}]]}",
+    "{\"twoplyObjects\": [[{\"x\": 1}, {\"x\": 2}]]}",
+    "{\"twoplyObjects\": [[{\"x\": 1}, {\"x\": 2}], [{\"x\": 3}]]}",
+    "{\"twoplyRefs\": [[{\"value1\": \"foo\"}]]}",
+    "{\"twoplyRefs\": [[{\"value2\": 1}, {\"value1\": \"2\"}]]}",
+    "{\"twoplyRefs\": [[{\"value1\": \"1\", \"value2\": 2}], [{\"value2\": 2}]]}",
+    "{\"arrayOfNested\": []}",
+    "{\"arrayOfNested\": [{\"x\": {\"y\": 1}}]}",
+    "{\"arrayOfNested\": [{\"x\": {\"y\": 1}}, {\"x\": {\"y\": 2}}]}",
+  };
+
+  for (int i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]); ++i) {
+    const char* json = test_cases[i];
+    test_types_schema::ComplexTypes data;
+    MemoryReader reader(&json[0], strlen(json));
+    ErrorPtr error;
+    test_types_schema::Decode(&reader, &data, &error);
+    EXPECT_TRUE(error.get() == NULL)
+        << "For testcase: " << json << "\n"
+        << "Got error: " << error->ToString();
+  }
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

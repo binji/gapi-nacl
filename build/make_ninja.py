@@ -335,7 +335,15 @@ def Code(w):
   for name in TEST_GEN_FILES:
     outbase = os.path.join('out/gen', os.path.splitext(name)[0])
     outs = [outbase + ext for ext in ('.h', '.cc')]
-    w.build(outs, 'gapi-gen', name, implicit='script/gapi.py',
+    w.build(outs, 'gapi-gen', name,
+        implicit=[
+            'script/easy_template.py',
+            'script/gapi.py',
+            'script/gapi_utils.py',
+            'script/header_service.py',
+            'script/service.py',
+            'script/source_service.py',
+        ],
         variables={'outbase': outbase,
                    'flags': '-n %s' % FilenameToNamespace(name)})
 

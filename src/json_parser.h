@@ -37,22 +37,23 @@ class JsonParser : public Writer, public Closer {
   virtual size_t Write(const void* buf, size_t count, ErrorPtr* error);
   virtual void Close(ErrorPtr* error);
 
+  bool HasCallbacks() const;
   void PushCallbacks(JsonCallbacks* callbacks);
   bool PopCallbacks();
+
+  int OnNull();
+  int OnBool(bool value);
+  int OnNumber(const char* s, size_t length);
+  int OnString(const unsigned char* s, size_t length);
+  int OnStartMap();
+  int OnMapKey(const unsigned char* s, size_t length);
+  int OnEndMap();
+  int OnStartArray();
+  int OnEndArray();
 
  private:
   void SetErrorFromStatus(ErrorPtr* error, yajl_status status,
                           const char* text, size_t length);
-
-  int OnNull(JsonParser* p);
-  int OnBool(JsonParser* p, bool value);
-  int OnNumber(JsonParser* p, const char* s, size_t length);
-  int OnString(JsonParser* p, const unsigned char* s, size_t length);
-  int OnStartMap(JsonParser* p);
-  int OnMapKey(JsonParser* p, const unsigned char* s, size_t length);
-  int OnEndMap(JsonParser* p);
-  int OnStartArray(JsonParser* p);
-  int OnEndArray(JsonParser* p);
 
   JsonCallbacks* top_callbacks() {
     assert(!callbacks_stack_.empty());
@@ -63,17 +64,17 @@ class JsonParser : public Writer, public Closer {
 #define THUNK0(NAME) \
   static int Thunk##NAME(void* ctx) { \
     JsonParser* p = static_cast<JsonParser*>(ctx); \
-    return p->NAME(p); \
+    return p->NAME(); \
   }
 #define THUNK1(NAME, T0) \
   static int Thunk##NAME(void* ctx, T0 arg0) { \
     JsonParser* p = static_cast<JsonParser*>(ctx); \
-    return p->NAME(p, arg0); \
+    return p->NAME(arg0); \
   }
 #define THUNK2(NAME, T0, T1) \
   static int Thunk##NAME(void* ctx, T0 arg0, T1 arg1) { \
     JsonParser* p = static_cast<JsonParser*>(ctx); \
-    return p->NAME(p, arg0, arg1); \
+    return p->NAME(arg0, arg1); \
   }
 
   THUNK0(OnNull);

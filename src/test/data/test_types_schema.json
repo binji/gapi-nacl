@@ -182,6 +182,78 @@
           }
         }
       }
+    },
+    "ComplexTypes": {
+      "id": "ComplexTypes",
+      "type": "object",
+      "properties": {
+        "twoply": {
+          "type": "array",
+          "description": "outer array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        },
+        "threeply": {
+          "type": "array",
+          "description": "outer array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int32"
+              }
+            }
+          }
+        },
+        "twoplyObjects": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            }
+          }
+        },
+        "twoplyRefs": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "DummyRef"
+            }
+          }
+        },
+        "arrayOfNested": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "object",
+                "properties": {
+                  "y": {
+                    "type": "integer",
+                    "format": "int32"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
