@@ -106,6 +106,7 @@ GAPI_SOURCE_FILES = [
   'src/error.cc',
   'src/io.cc',
   'src/json_parser.cc',
+  'src/json_generator.cc',
 ]
 TEST_SOURCE_FILES = [
   'src/test/main.cc',

@@ -156,6 +156,7 @@ struct {{schema}};
 
 [[for schema in self.toplevel_schemas:]]
 void Decode(Reader* src, {{schema}}* out_data, ErrorPtr* error);
+void Encode(Writer* src, {{schema}}* data, ErrorPtr* error);
 [[]]
 
 """
@@ -249,6 +250,7 @@ SOURCE_HEAD = """\
 #include <string.h>
 #include <limits>
 #include <vector>
+#include "json_generator.h"
 #include "json_parser.h"
 #include "json_parser_macros.h"
 
@@ -263,6 +265,7 @@ static const size_t kMaxNumberBufferSize = 32;
 
 SOURCE_FOOT = """\
 [[if self.options.namespace:]]
+
 }  // namespace {{self.options.namespace}}
 [[]]
 """
@@ -299,6 +302,8 @@ class {{sub_schema.cbtype}} : public JsonCallbacks {
   {{sub_schema.ctype}}* data_;
   int state_;
 };
+
+bool Encode(JsonGenerator* g, {{sub_schema.ctype}}* data, ErrorPtr* error);
 
 """
 
@@ -515,6 +520,64 @@ int {{sub_schema.cbtype}}::OnEndArray(JsonParser* p, ErrorPtr* error) {
 [[]]
 }
 
+void Encode(Writer* src, {{sub_schema.ctype}}* data, ErrorPtr* error) {
+  JsonGenerator g(src);
+  Encode(&g, data, error);
+}
+"""
+
+SOURCE_ENC_BEGIN_SCHEMA = """\
+
+bool Encode(JsonGenerator* g, {{schema_info.ctype}}* data, ErrorPtr* error) {
+  if (!g->GenStartMap(error)) return false;
+"""
+
+SOURCE_ENC_END_SCHEMA = """\
+  if (!g->GenEndMap(error)) return false;
+  return true;
+}
+"""
+
+SOURCE_ENC_PROP = """\
+  if (!g->GenString(\"{{prop_name}}\", {{len(prop_name)}}, error)) return false;
+"""
+
+SOURCE_ENC_PROP_TYPE_FORMAT = """\
+[[if ctype == 'bool':]]
+  if (!g->GenBool(data->{{cident}}, error)) return false;
+[[elif ctype == 'int32_t':]]
+  if (!g->GenInt32(data->{{cident}}, error)) return false;
+[[elif ctype == 'uint32_t':]]
+  if (!g->GenUint32(data->{{cident}}, error)) return false;
+[[elif ctype == 'int64_t':]]
+  if (!g->GenInt64(data->{{cident}}, error)) return false;
+[[elif ctype == 'uint64_t':]]
+  if (!g->GenUint64(data->{{cident}}, error)) return false;
+[[elif ctype == 'float':]]
+  if (!g->GenFloat(data->{{cident}}, error)) return false;
+[[elif ctype == 'double':]]
+  if (!g->GenDouble(data->{{cident}}, error)) return false;
+[[elif ctype == 'std::string':]]
+  if (!g->GenString(data->{{cident}}.data(), data->{{cident}}.length(), error)) return false;
+[[]]
+"""
+
+SOURCE_ENC_PROP_TYPE_REF = """\
+  if (!Encode(g, data->{{cident}}.get(), error)) return false;
+"""
+
+SOURCE_ENC_PROP_TYPE_OBJECT = """\
+  if (!Encode(g, &data->{{cident}}, error)) return false;
+"""
+
+SOURCE_ENC_BEGIN_PROP_TYPE_ARRAY = """\
+  if (!g->GenStartArray(error)) return false;
+  for (size_t i = 0; i < data->{{cident}}.size(); ++i) {
+"""
+
+SOURCE_ENC_END_PROP_TYPE_ARRAY = """\
+  }
+  if (!g->GenEndArray(error)) return false;
 """
 
 
@@ -545,6 +608,7 @@ class SchemaInfo(object):
     self.props = []
     self.decf = cStringIO.StringIO()
     self.deff = cStringIO.StringIO()
+    self.encodef = cStringIO.StringIO()
 
 
 class CSourceService(Service):
@@ -612,11 +676,14 @@ class CSourceService(Service):
     is_array = self.state.endswith('_A')
     self.schema.map_states[self.state] = \
         (cident, schema_info.ctype, schema_info.cbtype, is_array, 'object')
+    self.schema.encodef.write(RunTemplateString(SOURCE_ENC_PROP_TYPE_OBJECT, vars()))
 
     self.schema.sub_schemas.add(schema_info.base_cbtype)
     self.schema_stack.append(schema_info)
+    self.schema.encodef.write(RunTemplateString(SOURCE_ENC_BEGIN_SCHEMA, vars()))
 
   def EndSchema(self, schema_name, schema):
+    self.schema.encodef.write(RunTemplateString(SOURCE_ENC_END_SCHEMA, vars()))
     sub_schema = self.schema
     self.schema_stack.pop()
     groupby = itertools.groupby
@@ -624,12 +691,14 @@ class CSourceService(Service):
     self.schema.decf.write(sub_schema.decf.getvalue())
     self.schema.deff.write(RunTemplateString(SOURCE_SCHEMA_DEF, vars()))
     self.schema.deff.write(sub_schema.deff.getvalue())
+    self.schema.deff.write(sub_schema.encodef.getvalue())
 
   def BeginProperty(self, prop_name, prop):
     current_state = self.state
     self.PushState(gapi_utils.Upper(prop_name))
     next_state = self.state
     self.schema.props.append((prop_name, next_state))
+    self.schema.encodef.write(RunTemplateString(SOURCE_ENC_PROP, vars()))
 
   def EndProperty(self, prop_name, prop):
     self.PopState()
@@ -639,6 +708,7 @@ class CSourceService(Service):
     is_array = self.state.endswith('_A')
     assert self.state not in self.schema.map_states
     self.schema.map_states[self.state] = (cident, ref, ref + 'Callbacks', is_array, 'ref')
+    self.schema.encodef.write(RunTemplateString(SOURCE_ENC_PROP_TYPE_REF, vars()))
 
   def OnPropertyTypeFormat(self, prop_name, prop, prop_type, prop_format):
     # TODO(binji): handle any
@@ -655,6 +725,7 @@ class CSourceService(Service):
     elif prop_type == 'string':
       assert self.state not in self.schema.string_states
       self.schema.string_states[self.state] = data
+    self.schema.encodef.write(RunTemplateString(SOURCE_ENC_PROP_TYPE_FORMAT, vars()))
 
   def BeginPropertyTypeArray(self, prop_name, prop, prop_items):
     prev_state = self.prev_state
@@ -665,8 +736,10 @@ class CSourceService(Service):
     next_state = self.state
     assert current_state not in self.schema.array_states
     self.schema.array_states[current_state] = (next_state, prev_state)
+    self.schema.encodef.write(RunTemplateString(SOURCE_ENC_BEGIN_PROP_TYPE_ARRAY, vars()))
 
   def EndPropertyTypeArray(self, prop_name, prop, prop_items):
+    self.schema.encodef.write(RunTemplateString(SOURCE_ENC_END_PROP_TYPE_ARRAY, vars()))
     self.PopState()
 
 
