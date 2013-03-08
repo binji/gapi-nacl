@@ -219,7 +219,7 @@ int {{self.schema.cbtype}}::OnStartMap(JsonParser* p, ErrorPtr* error) {
       PUSH_CALLBACK_REF_AND_RETURN({{info.ctype}}, {{info.cbtype}}, {{info.cident}});
 [[    elif info.map_type == 'object':]]
 [[      if info.is_array:]]
-      data_->{{info.cident}}.push_back({{self.schema.ctype}}::{{info.ctype}}());
+      data_->{{info.cident}}.push_back({{info.ctype}}());
 [[      ]]
       state_ = {{info.next_state}};
       return 1;
@@ -420,6 +420,7 @@ class Service(service.Service):
     if self.schema_level == 0:
       self.schema = SchemaInfo(schema_name, self.schema)
     self.schema_level += 1
+    self.prop_type = gapi_utils.CapWords(schema_name)
 
   def EndSchema(self, schema_name, schema):
     self.schema_level -= 1
@@ -445,7 +446,7 @@ class Service(service.Service):
     assert self.state not in self.schema.map_states
     self.schema.map_states[self.state] = \
         RefStateInfo(cident, self.non_key_state, ref, ref + 'Callbacks', is_array, 'ref')
-    self.prop_type = gapi_utils.WrapType('std::tr1::shared_ptr<%s>', self.prop_type)
+    self.prop_type = gapi_utils.WrapType('std::tr1::shared_ptr<%s>', ref)
 
   def OnPropertyTypeFormat(self, prop_name, prop, prop_type, prop_format):
     # TODO(binji): handle any
@@ -481,17 +482,20 @@ class Service(service.Service):
         self.schema.array_states[self.state]._replace(elem_type=self.prop_type)
 
   def BeginPropertyTypeObject(self, prop_name, prop):
+    if not self.prop_type:
+      self.prop_type = self.schema.ctype
+    self.prop_type += '::%sObject' % gapi_utils.CapWords(prop_name)
     cident = self.cident
     prev_state = self.non_key_state
     basename = gapi_utils.CapWords(prop_name)
-    ctype = basename + 'Object'
     current_state = self.state
     is_array = self.is_array_state
     self.PushContext(None, 'object')
     next_state = self.state
     assert self.state not in self.schema.map_states
     self.schema.map_states[current_state] = \
-        ObjectStateInfo(cident, next_state, prev_state, ctype, is_array, 'object')
+        ObjectStateInfo(cident, next_state, prev_state, self.prop_type, is_array, 'object')
 
   def EndPropertyTypeObject(self, prop_name, prop, schema_name):
     self.PopContext()
+    self.prop_type = self.schema.map_states[self.state].ctype
