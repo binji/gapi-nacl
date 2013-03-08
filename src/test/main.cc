@@ -173,6 +173,35 @@ TEST(ArrayTypesTest, TestFailures) {
   }
 }
 
+TEST(ArrayOfArrayTest, TestParse) {
+  const char* test_cases[] = {
+    "{\"twoply\": []}",
+    "{\"twoply\": [[]]}",
+    "{\"twoply\": [[], [], [], [], []]}",
+    "{\"twoply\": [[1, 2]]}",
+    "{\"twoply\": [[1, 2], []]}",
+    "{\"twoply\": [[1, 2], [3, 4]]}",
+    "{\"twoply\": [[1], [3], [5], [7]]}",
+    "{\"threeply\": []}",
+    "{\"threeply\": [[]]}",
+    "{\"threeply\": [[[]]]}",
+    "{\"threeply\": [[],[]]}",
+    "{\"threeply\": [[],[],[[]]]}",
+    "{\"threeply\": [[[1],[2],[3]],[[4],[5],[6]],[[7],[8],[9]]]}",
+  };
+
+  for (int i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]); ++i) {
+    const char* json = test_cases[i];
+    test_types_schema::ArrayOfArray data;
+    MemoryReader reader(&json[0], strlen(json));
+    ErrorPtr error;
+    test_types_schema::Decode(&reader, &data, &error);
+    EXPECT_TRUE(error.get() == NULL)
+        << "For testcase: " << json << "\n"
+        << "Got error: " << error->ToString();
+  }
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

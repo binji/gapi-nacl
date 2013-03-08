@@ -265,6 +265,9 @@ int {{self.schema.cbtype}}::OnStartArray(JsonParser* p, ErrorPtr* error) {
   switch (state_) {
 [[  for state, info in self.schema.array_states.iteritems():]]
     case {{state}}:
+[[    if info.is_array:]]
+      data_->{{info.cident}}.push_back({{info.elem_type}}());
+[[    ]]
       state_ = {{info.next_state}};
       return 1;
 [[  ]]
@@ -323,28 +326,13 @@ def CIdentFromContextStack(context_stack):
   if not context_stack:
     return ''
   result = ''
-  last_name_ix = 0
-  ix = 0
-  for ix, (name, _) in enumerate(context_stack):
-    if name:
-      # Build up identifier from last name.
-      for _, typ in context_stack[last_name_ix+1:ix]:
-        if typ == 'array':
-          result += '.back()'
-        if typ == 'object':
-          result += '.'
-      result += gapi_utils.SnakeCase(name)
-      last_name_ix = ix
-  return result
-  """
   prev_typ = None
   for name, typ in context_stack:
+    if prev_typ == 'array': result += '.back()'
     if name: result += gapi_utils.SnakeCase(name)
-    elif typ == 'array': result += '.back()'
     elif typ == 'object': result += '.'
     prev_typ = typ
   return result
-  """
 
 
 class SchemaInfo(object):
@@ -366,7 +354,7 @@ class SchemaInfo(object):
 PrimitiveStateInfo = collections.namedtuple(
     'PrimitiveStateInfo', ['cident', 'prev_state', 'ctype', 'is_array'])
 ArrayStateInfo = collections.namedtuple(
-    'ArrayStateInfo', ['cident', 'next_state', 'prev_state'])
+    'ArrayStateInfo', ['cident', 'next_state', 'prev_state', 'elem_type', 'is_array'])
 RefStateInfo = collections.namedtuple(
     'RefStateInfo', ['cident', 'prev_state', 'ctype', 'cbtype', 'is_array', 'map_type'])
 ObjectStateInfo = collections.namedtuple(
@@ -382,6 +370,7 @@ class Service(service.Service):
     self.headerfname = headerfname
     self.schema = None
     self.schema_level = 0
+    self.prop_type = ''
     self.decf = cStringIO.StringIO()
     self.deff = cStringIO.StringIO()
     super(Service, self).__init__(service)
@@ -445,6 +434,7 @@ class Service(service.Service):
     self.PushContext(prop_name, None)
     next_state = self.state
     self.schema.props_states[current_state].append(PropStateInfo(prop_name, next_state))
+    self.prop_type = ''
 
   def EndProperty(self, prop_name, prop):
     self.PopContext()
@@ -455,6 +445,7 @@ class Service(service.Service):
     assert self.state not in self.schema.map_states
     self.schema.map_states[self.state] = \
         RefStateInfo(cident, self.non_key_state, ref, ref + 'Callbacks', is_array, 'ref')
+    self.prop_type = gapi_utils.WrapType('std::tr1::shared_ptr<%s>', self.prop_type)
 
   def OnPropertyTypeFormat(self, prop_name, prop, prop_type, prop_format):
     # TODO(binji): handle any
@@ -469,19 +460,25 @@ class Service(service.Service):
     elif prop_type == 'string':
       assert self.state not in self.schema.string_states
       self.schema.string_states[self.state] = data
+    self.prop_type = ctype
 
   def BeginPropertyTypeArray(self, prop_name, prop, prop_items):
-    current_state = self.state
+    cident = self.cident
     prev_state = self.non_key_state
     cident = self.cident
+    current_state = self.state
+    is_array = self.is_array_state
     self.PushContext(None, 'array')
     next_state = self.state
     assert current_state not in self.schema.array_states
     self.schema.array_states[current_state] = \
-        ArrayStateInfo(cident, next_state, prev_state)
+        ArrayStateInfo(cident, next_state, prev_state, None, is_array)
 
   def EndPropertyTypeArray(self, prop_name, prop, prop_items):
+    self.prop_type = gapi_utils.WrapType('std::vector<%s>', self.prop_type)
     self.PopContext()
+    self.schema.array_states[self.state] = \
+        self.schema.array_states[self.state]._replace(elem_type=self.prop_type)
 
   def BeginPropertyTypeObject(self, prop_name, prop):
     cident = self.cident

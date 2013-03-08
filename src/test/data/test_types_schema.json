@@ -182,6 +182,37 @@
           }
         }
       }
+    },
+    "ArrayOfArray": {
+      "id": "ArrayOfArray",
+      "type": "object",
+      "properties": {
+        "twoply": {
+          "type": "array",
+          "description": "outer array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        },
+        "threeply": {
+          "type": "array",
+          "description": "outer array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int32"
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
