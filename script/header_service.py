@@ -70,7 +70,7 @@ class Service(service.Service):
     self.outfname = outfname
     self.options = options
     self.indent = ''
-    self.prop_stack = []
+    self.prop_type = []
     self.schema_stack = []
     self.toplevel_schemas = []
     super(Service, self).__init__(service)
@@ -98,34 +98,29 @@ class Service(service.Service):
     self.schema_stack.pop()
 
   def BeginProperty(self, prop_name, prop):
-    self.prop_stack.append('')
+    self.prop_type = ''
 
   def EndProperty(self, prop_name, prop):
     self.f.write('%s%s %s;\n\n' % (
         self.indent,
-        self.prop_stack[-1],
+        self.prop_type,
         gapi_utils.SnakeCase(prop_name)))
-    self.prop_stack.pop()
 
   def OnPropertyComment(self, prop_name, prop, comment):
     for line in comment.splitlines():
       WriteWrappedComment(self.f, line, self.indent, 80)
 
   def OnPropertyTypeRef(self, prop_name, prop, ref):
-    self.prop_stack[-1] = gapi_utils.WrapType('std::tr1::shared_ptr<%s>', ref)
+    self.prop_type = gapi_utils.WrapType('std::tr1::shared_ptr<%s>', ref)
 
   def OnPropertyTypeFormat(self, prop_name, prop, prop_type, prop_format):
-    self.prop_stack[-1] = service.TYPE_DICT[(prop_type, prop_format)]
+    self.prop_type = service.TYPE_DICT[(prop_type, prop_format)]
 
   def EndPropertyTypeArray(self, prop_name, prop, prop_items):
-    item_type = self.prop_stack[-1]
-    self.prop_stack[-1] = gapi_utils.WrapType('std::vector<%s>', item_type)
+    self.prop_type = gapi_utils.WrapType('std::vector<%s>', self.prop_type)
 
   def BeginPropertyTypeObject(self, prop_name, prop):
     return gapi_utils.CapWords(prop_name + 'Object')
 
   def EndPropertyTypeObject(self, prop_name, prop, schema_name):
-    self.prop_stack[-1] = schema_name
-
-
-
+    self.prop_type = schema_name

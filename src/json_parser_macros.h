@@ -1,32 +1,23 @@
 #ifndef JSON_PARSER_MACROS_H_
 #define JSON_PARSER_MACROS_H_
 
-#define PUSH_CALLBACK_OBJECT_AND_RETURN(TYPE, CBTYPE, IDENT) \
-  p->PushCallbacks(new CBTYPE(&data_->IDENT)); \
-  return 1
-
-#define PUSH_CALLBACK_OBJECT_ARRAY_AND_RETURN(TYPE, CBTYPE, IDENT) \
-  data_->IDENT.push_back(TYPE()); \
-  p->PushCallbacks(new CBTYPE(&data_->IDENT.back())); \
-  return 1
-
 #define PUSH_CALLBACK_REF_AND_RETURN(TYPE, CBTYPE, IDENT) \
   data_->IDENT.reset(new TYPE()); \
   p->PushCallbacks(new CBTYPE(data_->IDENT.get())); \
-  return 1
+  return p->OnStartMap()
 
 #define PUSH_CALLBACK_REF_ARRAY_AND_RETURN(TYPE, CBTYPE, IDENT) \
   data_->IDENT.push_back(std::tr1::shared_ptr<TYPE>(new TYPE())); \
   p->PushCallbacks(new CBTYPE(data_->IDENT.back().get())); \
-  return 1
+  return p->OnStartMap()
 
 #define APPEND_BOOL_AND_RETURN(IDENT) \
   data_->IDENT.push_back(value); \
   return 1
 
-#define SET_BOOL_AND_RETURN(IDENT) \
+#define SET_BOOL_AND_RETURN(IDENT, STATE) \
   data_->IDENT = value; \
-  state_ = STATE_TOP; \
+  state_ = STATE; \
   return 1
 
 #define CONVERT_AND_CHECK_INT(TYPE, FUNC, FUNC_TYPE) \
@@ -59,23 +50,23 @@
 #define APPEND_UINT64_AND_RETURN(IDENT) \
   APPEND_INT_AND_RETURN(uint64_t, IDENT, strtoull, unsigned long long int)
 
-#define SET_INT_AND_RETURN(TYPE, IDENT, FUNC, FUNC_TYPE) { \
+#define SET_INT_AND_RETURN(TYPE, IDENT, FUNC, FUNC_TYPE, STATE) { \
   CONVERT_AND_CHECK_INT(TYPE, FUNC, FUNC_TYPE) \
   data_->IDENT = static_cast<TYPE>(value); } \
-  state_ = STATE_TOP; \
+  state_ = STATE; \
   return 1
 
-#define SET_INT32_AND_RETURN(IDENT) \
-  SET_INT_AND_RETURN(int32_t, IDENT, strtol, long int)
+#define SET_INT32_AND_RETURN(IDENT, STATE) \
+  SET_INT_AND_RETURN(int32_t, IDENT, strtol, long int, STATE)
 
-#define SET_UINT32_AND_RETURN(IDENT) \
-  SET_INT_AND_RETURN(uint32_t, IDENT, strtoul, unsigned long int)
+#define SET_UINT32_AND_RETURN(IDENT, STATE) \
+  SET_INT_AND_RETURN(uint32_t, IDENT, strtoul, unsigned long int, STATE)
 
-#define SET_INT64_AND_RETURN(IDENT) \
-  SET_INT_AND_RETURN(int64_t, IDENT, strtoll, long long int)
+#define SET_INT64_AND_RETURN(IDENT, STATE) \
+  SET_INT_AND_RETURN(int64_t, IDENT, strtoll, long long int, STATE)
 
-#define SET_UINT64_AND_RETURN(IDENT) \
-  SET_INT_AND_RETURN(uint64_t, IDENT, strtoull, unsigned long long int)
+#define SET_UINT64_AND_RETURN(IDENT, STATE) \
+  SET_INT_AND_RETURN(uint64_t, IDENT, strtoull, unsigned long long int, STATE)
 
 #define CONVERT_AND_CHECK_FP(TYPE, FUNC) \
   errno = 0; \
@@ -99,26 +90,26 @@
 #define APPEND_DOUBLE_AND_RETURN(IDENT) \
   APPEND_FP_AND_RETURN(double, IDENT, strtod)
 
-#define SET_FP_AND_RETURN(TYPE, IDENT, FUNC) { \
+#define SET_FP_AND_RETURN(TYPE, IDENT, FUNC, STATE) { \
   CONVERT_AND_CHECK_FP(TYPE, FUNC) \
   data_->IDENT = value; } \
-  state_ = STATE_TOP; \
+  state_ = STATE; \
   return 1
 
-#define SET_FLOAT_AND_RETURN(IDENT) \
-  SET_FP_AND_RETURN(float, IDENT, strtof)
+#define SET_FLOAT_AND_RETURN(IDENT, STATE) \
+  SET_FP_AND_RETURN(float, IDENT, strtof, STATE)
 
-#define SET_DOUBLE_AND_RETURN(IDENT) \
-  SET_FP_AND_RETURN(double, IDENT, strtod)
+#define SET_DOUBLE_AND_RETURN(IDENT, STATE) \
+  SET_FP_AND_RETURN(double, IDENT, strtod, STATE)
 
 #define APPEND_STRING_AND_RETURN(IDENT) \
   data_->IDENT.push_back( \
       std::string(reinterpret_cast<const char*>(s), length)); \
   return 1
 
-#define SET_STRING_AND_RETURN(IDENT) \
+#define SET_STRING_AND_RETURN(IDENT, STATE) \
   data_->IDENT.assign(reinterpret_cast<const char*>(s), length); \
-  state_ = STATE_TOP; \
+  state_ = STATE; \
   return 1
 
 #define CHECK_MAP_KEY(NAME, LEN, STATE) \

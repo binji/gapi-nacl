@@ -6,6 +6,8 @@ JsonParser::JsonParser() {
 }
 
 JsonParser::~JsonParser() {
+  for (size_t i = 0; i < callbacks_stack_.size(); ++i)
+    delete callbacks_stack_[i];
   yajl_free(handle_);
 }
 
@@ -57,40 +59,44 @@ void JsonParser::SetErrorFromStatus(ErrorPtr* error, yajl_status status,
   }
 }
 
-int JsonParser::OnNull(JsonParser* p) {
-  return top_callbacks()->OnNull(p, &error_);
+int JsonParser::OnNull() {
+  return top_callbacks()->OnNull(this, &error_);
 }
 
-int JsonParser::OnBool(JsonParser* p, bool value) {
-  return top_callbacks()->OnBool(p, value, &error_);
+int JsonParser::OnBool(bool value) {
+  return top_callbacks()->OnBool(this, value, &error_);
 }
 
-int JsonParser::OnNumber(JsonParser* p, const char* s, size_t length) {
-  return top_callbacks()->OnNumber(p, s, length, &error_);
+int JsonParser::OnNumber(const char* s, size_t length) {
+  return top_callbacks()->OnNumber(this, s, length, &error_);
 }
 
-int JsonParser::OnString(JsonParser* p, const unsigned char* s, size_t length) {
-  return top_callbacks()->OnString(p, s, length, &error_);
+int JsonParser::OnString(const unsigned char* s, size_t length) {
+  return top_callbacks()->OnString(this, s, length, &error_);
 }
 
-int JsonParser::OnStartMap(JsonParser* p) {
-  return top_callbacks()->OnStartMap(p, &error_);
+int JsonParser::OnStartMap() {
+  return top_callbacks()->OnStartMap(this, &error_);
 }
 
-int JsonParser::OnMapKey(JsonParser* p, const unsigned char* s, size_t length) {
-  return top_callbacks()->OnMapKey(p, s, length, &error_);
+int JsonParser::OnMapKey(const unsigned char* s, size_t length) {
+  return top_callbacks()->OnMapKey(this, s, length, &error_);
 }
 
-int JsonParser::OnEndMap(JsonParser* p) {
-  return top_callbacks()->OnEndMap(p, &error_);
+int JsonParser::OnEndMap() {
+  return top_callbacks()->OnEndMap(this, &error_);
 }
 
-int JsonParser::OnStartArray(JsonParser* p) {
-  return top_callbacks()->OnStartArray(p, &error_);
+int JsonParser::OnStartArray() {
+  return top_callbacks()->OnStartArray(this, &error_);
 }
 
-int JsonParser::OnEndArray(JsonParser* p) {
-  return top_callbacks()->OnEndArray(p, &error_);
+int JsonParser::OnEndArray() {
+  return top_callbacks()->OnEndArray(this, &error_);
+}
+
+bool JsonParser::HasCallbacks() const {
+  return !callbacks_stack_.empty();
 }
 
 void JsonParser::PushCallbacks(JsonCallbacks* callbacks) {
@@ -100,6 +106,7 @@ void JsonParser::PushCallbacks(JsonCallbacks* callbacks) {
 bool JsonParser::PopCallbacks() {
   if (callbacks_stack_.empty())
     return false;
+  delete callbacks_stack_.back();
   callbacks_stack_.pop_back();
   return true;
 }
