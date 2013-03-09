@@ -7,33 +7,6 @@ import gapi_utils
 import service
 
 
-SOURCE_HEAD = """\
-#include "{{header}}"
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <limits>
-#include <vector>
-#include "json_generator.h"
-#include "json_parser.h"
-#include "json_parser_macros.h"
-
-
-[[if self.options.namespace:]]
-namespace {{self.options.namespace}} {
-
-static const size_t kMaxNumberBufferSize = 32;
-
-[[]]
-"""
-
-SOURCE_FOOT = """\
-[[if self.options.namespace:]]
-}  // namespace {{self.options.namespace}}
-[[]]
-"""
-
 SOURCE_SCHEMA_DECL = """\
 class {{self.schema.cbtype}} : public JsonCallbacks {
  public:
@@ -303,101 +276,7 @@ int {{self.schema.cbtype}}::OnEndArray(JsonParser* p, ErrorPtr* error) {
 [[]]
 }
 
-bool Encode(JsonGenerator* g, {{self.schema.ctype}}* data, ErrorPtr* error);
-void Encode(Writer* src, {{self.schema.ctype}}* data, ErrorPtr* error) {
-  JsonGenerator g(src);
-  Encode(&g, data, error);
-}
 """
-
-SOURCE_ENC_BEGIN_SCHEMA = """\
-
-bool Encode(JsonGenerator* g, {{self.schema.ctype}}* data, ErrorPtr* error) {
-  if (!g->GenStartMap(error)) return false;
-"""
-
-SOURCE_ENC_END_SCHEMA = """\
-  if (!g->GenEndMap(error)) return false;
-  return true;
-}
-"""
-
-SOURCE_ENC_PROP = """\
-  if (!g->GenString(\"{{prop_name}}\", {{len(prop_name)}}, error)) return false;
-"""
-
-SOURCE_ENC_PROP_TYPE_FORMAT = """\
-[[suffix = '[i]' if is_array else '']]
-[[if ctype == 'bool':]]
-  if (!g->GenBool(data->{{cident}}{{suffix}}, error)) return false;
-[[elif ctype == 'int32_t':]]
-  if (!g->GenInt32(data->{{cident}}{{suffix}}, error)) return false;
-[[elif ctype == 'uint32_t':]]
-  if (!g->GenUint32(data->{{cident}}{{suffix}}, error)) return false;
-[[elif ctype == 'int64_t':]]
-  if (!g->GenInt64(data->{{cident}}{{suffix}}, error)) return false;
-[[elif ctype == 'uint64_t':]]
-  if (!g->GenUint64(data->{{cident}}{{suffix}}, error)) return false;
-[[elif ctype == 'float':]]
-  if (!g->GenFloat(data->{{cident}}{{suffix}}, error)) return false;
-[[elif ctype == 'double':]]
-  if (!g->GenDouble(data->{{cident}}{{suffix}}, error)) return false;
-[[elif ctype == 'std::string':]]
-  if (!g->GenString(data->{{cident}}{{suffix}}.data(), data->{{cident}}{{suffix}}.length(), error)) return false;
-[[]]
-"""
-
-SOURCE_ENC_PROP_TYPE_REF = """\
-[[suffix = '[i]' if is_array else '']]
-  if (!Encode(g, data->{{cident}}{{suffix}}.get(), error)) return false;
-"""
-
-SOURCE_ENC_PROP_TYPE_OBJECT = """\
-[[suffix = '[i]' if is_array else '']]
-  if (!Encode(g, &data->{{cident}}{{suffix}}, error)) return false;
-"""
-
-SOURCE_ENC_BEGIN_PROP_TYPE_ARRAY = """\
-[[suffix = '[i]' if is_array else '']]
-  if (!g->GenStartArray(error)) return false;
-  for (size_t i = 0; i < data->{{cident}}{{suffix}}.size(); ++i) {
-"""
-
-SOURCE_ENC_END_PROP_TYPE_ARRAY = """\
-  }
-  if (!g->GenEndArray(error)) return false;
-"""
-
-
-def StateFromContextStack(context_stack):
-  if not context_stack:
-    return 'STATE_TOP'
-  result = 'STATE'
-  prev_typ = None
-  for name, typ in context_stack:
-    if name or not prev_typ:
-      result += '_'
-    if name: result += gapi_utils.Upper(name)
-    elif typ == 'array': result += 'A'
-    elif typ == 'object': result += 'O'
-    prev_typ = typ
-  if not prev_typ:
-    result += '_K'
-  return result
-
-
-def CIdentFromContextStack(context_stack):
-  if not context_stack:
-    return ''
-  result = ''
-  prev_typ = None
-  for name, typ in context_stack:
-    if prev_typ == 'array': result += '.back()'
-    if name: result += gapi_utils.SnakeCase(name)
-    elif typ == 'object': result += '.'
-    prev_typ = typ
-  return result
-
 
 class SchemaInfo(object):
   def __init__(self, schema_name=None, parent=None):
@@ -427,41 +306,67 @@ PropStateInfo = collections.namedtuple(
     'PropStateInfo', ['name', 'next_state'])
 
 
-class Service(service.Service):
-  def __init__(self, service, outfname, headerfname, options):
-    self.outfname = outfname
+class DecodeService(service.Service):
+  def __init__(self, service, outf, options):
+    self.outf = outf
     self.options = options
-    self.headerfname = headerfname
     self.schema = None
     self.schema_level = 0
     self.prop_type = ''
     self.decf = cStringIO.StringIO()
     self.deff = cStringIO.StringIO()
-    self.encf = cStringIO.StringIO()
-    super(Service, self).__init__(service)
+    super(DecodeService, self).__init__(service)
 
   @property
   def state(self):
-    return StateFromContextStack(self.schema.context_stack)
+    return self.StateFromContextStack(self.schema.context_stack)
 
   @property
   def prev_state(self):
-    return StateFromContextStack(self.schema.context_stack[:-1])
+    return self.StateFromContextStack(self.schema.context_stack[:-1])
 
   @property
   def non_key_state(self):
     stack_copy = self.schema.context_stack[:]
     while stack_copy and not stack_copy[-1][1]:
       stack_copy.pop()
-    return StateFromContextStack(stack_copy)
+    return self.StateFromContextStack(stack_copy)
 
   @property
   def cident(self):
-    return CIdentFromContextStack(self.schema.context_stack)
+    return self.CIdentFromContextStack(self.schema.context_stack)
 
   @property
   def is_array_state(self):
     return self.schema.context_stack[-1][1] == 'array'
+
+  def StateFromContextStack(self, context_stack):
+    if not context_stack:
+      return 'STATE_TOP'
+    result = 'STATE'
+    prev_typ = None
+    for name, typ in context_stack:
+      if name or not prev_typ:
+        result += '_'
+      if name: result += gapi_utils.Upper(name)
+      elif typ == 'array': result += 'A'
+      elif typ == 'object': result += 'O'
+      prev_typ = typ
+    if not prev_typ:
+      result += '_K'
+    return result
+
+  def CIdentFromContextStack(self, context_stack):
+    if not context_stack:
+      return ''
+    result = ''
+    prev_typ = None
+    for name, typ in context_stack:
+      if prev_typ == 'array': result += '.back()'
+      if name: result += gapi_utils.SnakeCase(name)
+      elif typ == 'object': result += '.'
+      prev_typ = typ
+    return result
 
   def PushContext(self, name, typ):
     self.schema.context_stack.append((name, typ))
@@ -470,22 +375,13 @@ class Service(service.Service):
   def PopContext(self):
     self.schema.context_stack.pop()
 
-  def BeginService(self, name, version):
-    pass
-
   def EndService(self, name, version):
-    with open(self.outfname, 'w') as outf:
-      header = self.headerfname
-      outf.write(RunTemplateString(SOURCE_HEAD, vars()))
-      outf.write(self.decf.getvalue())
-      outf.write(self.deff.getvalue())
-      outf.write(self.encf.getvalue())
-      outf.write(RunTemplateString(SOURCE_FOOT, vars()))
+    self.outf.write(self.decf.getvalue())
+    self.outf.write(self.deff.getvalue())
 
   def BeginSchema(self, schema_name, schema):
     if self.schema_level == 0:
       self.schema = SchemaInfo(schema_name, self.schema)
-      self.encf.write(RunTemplateString(SOURCE_ENC_BEGIN_SCHEMA, vars()))
     self.schema_level += 1
 
   def EndSchema(self, schema_name, schema):
@@ -494,7 +390,6 @@ class Service(service.Service):
       groupby = itertools.groupby
       self.decf.write(RunTemplateString(SOURCE_SCHEMA_DECL, vars()))
       self.deff.write(RunTemplateString(SOURCE_SCHEMA_DEF, vars()))
-      self.encf.write(RunTemplateString(SOURCE_ENC_END_SCHEMA, vars()))
       self.schema = None
 
   def BeginProperty(self, prop_name, prop):
@@ -503,7 +398,6 @@ class Service(service.Service):
     next_state = self.state
     self.schema.props_states[current_state].append(PropStateInfo(prop_name, next_state))
     self.prop_type = ''
-    self.encf.write(RunTemplateString(SOURCE_ENC_PROP, vars()))
 
   def EndProperty(self, prop_name, prop):
     self.PopContext()
@@ -515,7 +409,6 @@ class Service(service.Service):
     self.schema.map_states[self.state] = \
         RefStateInfo(cident, self.non_key_state, ref, ref + 'Callbacks', is_array, 'ref')
     self.prop_type = gapi_utils.WrapType('std::tr1::shared_ptr<%s>', ref)
-    self.encf.write(RunTemplateString(SOURCE_ENC_PROP_TYPE_REF, vars()))
 
   def OnPropertyTypeFormat(self, prop_name, prop, prop_type, prop_format):
     # TODO(binji): handle any
@@ -533,7 +426,6 @@ class Service(service.Service):
       assert self.state not in self.schema.string_states
       self.schema.string_states[self.state] = data
     self.prop_type = ctype
-    self.encf.write(RunTemplateString(SOURCE_ENC_PROP_TYPE_FORMAT, vars()))
 
   def BeginPropertyTypeArray(self, prop_name, prop, prop_items):
     cident = self.cident
@@ -546,10 +438,8 @@ class Service(service.Service):
     assert current_state not in self.schema.array_states
     self.schema.array_states[current_state] = \
         ArrayStateInfo(cident, next_state, prev_state, None, is_array)
-    self.encf.write(RunTemplateString(SOURCE_ENC_BEGIN_PROP_TYPE_ARRAY, vars()))
 
   def EndPropertyTypeArray(self, prop_name, prop, prop_items):
-    self.encf.write(RunTemplateString(SOURCE_ENC_END_PROP_TYPE_ARRAY, vars()))
     self.prop_type = gapi_utils.WrapType('std::vector<%s>', self.prop_type)
     self.PopContext()
     self.schema.array_states[self.state] = \
@@ -573,3 +463,308 @@ class Service(service.Service):
   def EndPropertyTypeObject(self, prop_name, prop, schema_name):
     self.PopContext()
     self.prop_type = self.schema.map_states[self.state].ctype
+
+# ENCODING #####################################################################
+SOURCE_ENC_DECL_SCHEMA = """\
+bool Encode(JsonGenerator* g, {{self.schema.ctype}}* data, ErrorPtr* error);
+"""
+
+SOURCE_ENC_BEGIN_SCHEMA = """\
+
+void Encode(Writer* src, {{self.schema.ctype}}* data, ErrorPtr* error) {
+  JsonGenerator g(src);
+  Encode(&g, data, error);
+}
+
+bool Encode(JsonGenerator* g, {{self.schema.ctype}}* data, ErrorPtr* error) {
+  CHECK_GEN(StartMap);
+"""
+
+SOURCE_ENC_END_SCHEMA = """\
+  CHECK_GEN(EndMap);
+  return true;
+}
+"""
+
+SOURCE_ENC_PROP = """\
+  CHECK_GEN_KEY(\"{{prop_name}}\", {{len(prop_name)}});
+"""
+
+SOURCE_ENC_PROP_TYPE_FORMAT = """\
+[[if ctype == 'bool':]]
+  CHECK_GEN1(Bool, data->{{cident}});
+[[elif ctype == 'int32_t':]]
+  CHECK_GEN1(Int32, data->{{cident}});
+[[elif ctype == 'uint32_t':]]
+  CHECK_GEN1(Uint32, data->{{cident}});
+[[elif ctype == 'int64_t':]]
+  CHECK_GEN1(Int64, data->{{cident}});
+[[elif ctype == 'uint64_t':]]
+  CHECK_GEN1(Uint64, data->{{cident}});
+[[elif ctype == 'float':]]
+  CHECK_GEN1(Float, data->{{cident}});
+[[elif ctype == 'double':]]
+  CHECK_GEN1(Double, data->{{cident}});
+[[elif ctype == 'std::string':]]
+  CHECK_GEN_STRING(data->{{cident}});
+[[]]
+"""
+
+SOURCE_ENC_PROP_TYPE_REF = """\
+  CHECK_ENCODE(data->{{cident}}.get());
+"""
+
+SOURCE_ENC_BEGIN_PROP_TYPE_ARRAY = """\
+  CHECK_GEN(StartArray);
+  GEN_FOREACH({{ix}}, data->{{cident}}) {
+"""
+
+SOURCE_ENC_END_PROP_TYPE_ARRAY = """\
+  }
+  CHECK_GEN(EndArray);
+"""
+
+SOURCE_ENC_BEGIN_PROP_TYPE_OBJECT = """\
+  CHECK_GEN(StartMap);
+"""
+
+SOURCE_ENC_END_PROP_TYPE_OBJECT = """\
+  CHECK_GEN(EndMap);
+"""
+
+
+class EncodeService(service.Service):
+  def __init__(self, service, outf, options):
+    self.outf = outf
+    self.options = options
+    self.context_stack = []
+    self.schema = None
+    self.schema_level = 0
+    self.prop_type = ''
+    self.decf = cStringIO.StringIO()
+    self.deff = cStringIO.StringIO()
+    super(EncodeService, self).__init__(service)
+
+  @property
+  def cident(self):
+    return self.CIdentFromContextStack(self.context_stack)
+
+  @property
+  def is_array_state(self):
+    return self.context_stack[-1][1] == 'array'
+
+  @property
+  def ix_char(self):
+    return self.context_stack[-1][2]
+
+  @property
+  def indent(self):
+    result = ''
+    for _, typ, _ in self.context_stack:
+      if typ == 'array':
+        result += '  '
+    return result
+
+  def CIdentFromContextStack(self, context_stack):
+    if not context_stack:
+      return ''
+    result = ''
+    prev_typ, prev_ix = None, None
+    for name, typ, ix in context_stack:
+      if name: result += gapi_utils.SnakeCase(name)
+      if typ == 'array': result += '[%s]' % ix
+      elif typ == 'object': result += '.'
+      prev_typ, prev_ix = typ, ix
+    return result
+
+  def PushContext(self, name, typ):
+    next_ix = None
+    if self.context_stack:
+      next_ix = prev_ix = self.context_stack[-1][2]
+      if typ == 'array':
+        if prev_ix:
+          next_ix = chr(ord(prev_ix) + 1)
+        else:
+          next_ix = 'i'
+    self.context_stack.append((name, typ, next_ix))
+
+  def PopContext(self):
+    self.context_stack.pop()
+
+  def EndService(self, name, version):
+    self.outf.write(self.decf.getvalue())
+    self.outf.write(self.deff.getvalue())
+
+  def BeginSchema(self, schema_name, schema):
+    if self.schema_level == 0:
+      self.schema = SchemaInfo(schema_name, self.schema)
+      self.decf.write(RunTemplateString(SOURCE_ENC_DECL_SCHEMA, vars()))
+      self.deff.write(RunTemplateString(SOURCE_ENC_BEGIN_SCHEMA, vars()))
+    self.schema_level += 1
+
+  def EndSchema(self, schema_name, schema):
+    self.schema_level -= 1
+    if self.schema_level == 0:
+      self.deff.write(RunTemplateString(SOURCE_ENC_END_SCHEMA, vars()))
+      self.schema = None
+
+  def BeginProperty(self, prop_name, prop):
+    self.PushContext(prop_name, None)
+    self.prop_type = ''
+    self.deff.write(RunTemplateString(SOURCE_ENC_PROP, vars(),
+        output_indent=self.indent))
+
+  def EndProperty(self, prop_name, prop):
+    self.PopContext()
+
+  def OnPropertyTypeRef(self, prop_name, prop, ref):
+    cident = self.cident
+    is_array = self.is_array_state
+    self.prop_type = gapi_utils.WrapType('std::tr1::shared_ptr<%s>', ref)
+    self.deff.write(RunTemplateString(SOURCE_ENC_PROP_TYPE_REF, vars(),
+        output_indent=self.indent))
+
+  def OnPropertyTypeFormat(self, prop_name, prop, prop_type, prop_format):
+    cident = self.cident
+    is_array = self.is_array_state
+    ctype = service.TYPE_DICT[(prop_type, prop_format)]
+    self.prop_type = ctype
+    self.deff.write(RunTemplateString(SOURCE_ENC_PROP_TYPE_FORMAT, vars(),
+        output_indent=self.indent))
+
+  def BeginPropertyTypeArray(self, prop_name, prop, prop_items):
+    cident = self.cident
+    indent = self.indent
+    is_array = self.is_array_state
+    self.PushContext(None, 'array')
+    ix = self.ix_char
+    self.deff.write(RunTemplateString(SOURCE_ENC_BEGIN_PROP_TYPE_ARRAY, vars(),
+        output_indent=indent))
+
+  def EndPropertyTypeArray(self, prop_name, prop, prop_items):
+    self.prop_type = gapi_utils.WrapType('std::vector<%s>', self.prop_type)
+    self.PopContext()
+    self.deff.write(RunTemplateString(SOURCE_ENC_END_PROP_TYPE_ARRAY, vars(),
+        output_indent=self.indent))
+
+  def BeginPropertyTypeObject(self, prop_name, prop):
+    if not self.prop_type:
+      self.prop_type = self.schema.ctype
+    self.prop_type += '::%sObject' % gapi_utils.CapWords(prop_name)
+    cident = self.cident
+    is_array = self.is_array_state
+    self.PushContext(None, 'object')
+    self.deff.write(RunTemplateString(SOURCE_ENC_BEGIN_PROP_TYPE_OBJECT, vars(),
+        output_indent=self.indent))
+
+  def EndPropertyTypeObject(self, prop_name, prop, schema_name):
+    self.deff.write(RunTemplateString(SOURCE_ENC_END_PROP_TYPE_OBJECT, vars(),
+        output_indent=self.indent))
+    self.PopContext()
+
+
+# SERVICE ######################################################################
+
+SOURCE_HEAD = """\
+#include "{{self.headerfname}}"
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits>
+#include <vector>
+#include "json_generator.h"
+#include "json_parser.h"
+#include "json_parser_macros.h"
+
+
+[[if self.options.namespace:]]
+namespace {{self.options.namespace}} {
+
+static const size_t kMaxNumberBufferSize = 32;
+
+[[]]
+"""
+
+SOURCE_FOOT = """\
+[[if self.options.namespace:]]
+}  // namespace {{self.options.namespace}}
+[[]]
+"""
+
+
+class Service(service.Service):
+  def __init__(self, service, outfname, headerfname, options):
+    self.outfname = outfname
+    self.options = options
+    self.headerfname = headerfname
+    self.decf = cStringIO.StringIO()
+    self.decs = DecodeService(service, self.decf, options)
+    self.encf = cStringIO.StringIO()
+    self.encs = EncodeService(service, self.encf, options)
+    super(Service, self).__init__(service)
+
+  def BeginService(self, name, version):
+    self.encs.BeginService(name, version)
+    self.decs.BeginService(name, version)
+
+  def EndService(self, name, version):
+    self.encs.EndService(name, version)
+    self.decs.EndService(name, version)
+    with open(self.outfname, 'w') as outf:
+      outf.write(RunTemplateString(SOURCE_HEAD, vars()))
+      outf.write(self.decf.getvalue())
+      outf.write(self.encf.getvalue())
+      outf.write(RunTemplateString(SOURCE_FOOT, vars()))
+
+  def BeginSchema(self, schema_name, schema):
+    self.encs.BeginSchema(schema_name, schema)
+    self.decs.BeginSchema(schema_name, schema)
+
+  def EndSchema(self, schema_name, schema):
+    self.encs.EndSchema(schema_name, schema)
+    self.decs.EndSchema(schema_name, schema)
+
+  def BeginProperty(self, prop_name, prop):
+    self.encs.BeginProperty(prop_name, prop)
+    self.decs.BeginProperty(prop_name, prop)
+
+  def EndProperty(self, prop_name, prop):
+    self.encs.EndProperty(prop_name, prop)
+    self.decs.EndProperty(prop_name, prop)
+
+  def OnPropertyComment(self, prop_name, prop, comment):
+    self.encs.OnPropertyComment(prop_name, prop, comment)
+    self.decs.OnPropertyComment(prop_name, prop, comment)
+
+  def BeginPropertyType(self, prop_name, prop):
+    self.encs.BeginPropertyType(prop_name, prop)
+    self.decs.BeginPropertyType(prop_name, prop)
+
+  def EndPropertyType(self, prop_name, prop):
+    self.encs.EndPropertyType(prop_name, prop)
+    self.decs.EndPropertyType(prop_name, prop)
+
+  def OnPropertyTypeFormat(self, prop_name, prop, prop_type, prop_format):
+    self.encs.OnPropertyTypeFormat(prop_name, prop, prop_type, prop_format)
+    self.decs.OnPropertyTypeFormat(prop_name, prop, prop_type, prop_format)
+
+  def OnPropertyTypeRef(self, prop_name, prop, ref):
+    self.encs.OnPropertyTypeRef(prop_name, prop, ref)
+    self.decs.OnPropertyTypeRef(prop_name, prop, ref)
+
+  def BeginPropertyTypeArray(self, prop_name, prop, prop_items):
+    self.encs.BeginPropertyTypeArray(prop_name, prop, prop_items)
+    self.decs.BeginPropertyTypeArray(prop_name, prop, prop_items)
+
+  def EndPropertyTypeArray(self, prop_name, prop, prop_items):
+    self.encs.EndPropertyTypeArray(prop_name, prop, prop_items)
+    self.decs.EndPropertyTypeArray(prop_name, prop, prop_items)
+
+  def BeginPropertyTypeObject(self, prop_name, prop):
+    self.encs.BeginPropertyTypeObject(prop_name, prop)
+    self.decs.BeginPropertyTypeObject(prop_name, prop)
+
+  def EndPropertyTypeObject(self, prop_name, prop, schema_name):
+    self.encs.EndPropertyTypeObject(prop_name, prop, schema_name)
+    self.decs.EndPropertyTypeObject(prop_name, prop, schema_name)

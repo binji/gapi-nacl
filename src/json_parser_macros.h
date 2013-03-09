@@ -118,4 +118,13 @@
     state_ = STATE; \
     return 1; }
 
+// Encoding
+
+#define CHECK_GEN(NAME) if (!g->Gen##NAME(error)) return false
+#define CHECK_GEN1(NAME, ARG) if (!g->Gen##NAME(ARG, error)) return false
+#define CHECK_GEN_KEY(KEY, LEN) if (!g->GenString(KEY, LEN, error)) return false
+#define CHECK_GEN_STRING(ARG) if (!g->GenString(ARG.data(), ARG.size(), error)) return false
+#define CHECK_ENCODE(ARG) if (!Encode(g, ARG, error)) return false
+#define GEN_FOREACH(IX, ARRAY) for (size_t IX = 0; IX < ARRAY.size(); ++IX)
+
 #endif  // JSON_PARSER_MACROS_H_

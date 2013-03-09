@@ -17,7 +17,6 @@ TYPE_DICT = {
 class Service(object):
   def __init__(self, data):
     self.data = data
-    self._Run()
 
   @property
   def name(self):
@@ -27,7 +26,7 @@ class Service(object):
   def version(self):
     return self.data['version']
 
-  def _Run(self):
+  def Run(self):
     self.BeginService(self.name, self.version)
     if 'schemas' in self.data:
       for schema_name, schema in sorted(self.data['schemas'].iteritems()):
