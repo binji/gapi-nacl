@@ -281,8 +281,12 @@ int {{self.schema.cbtype}}::OnEndArray(JsonParser* p, ErrorPtr* error) {
 class SchemaInfo(object):
   def __init__(self, schema_name=None, parent=None):
     cap = gapi_utils.CapWords(schema_name)
+    if parent:
+      self.base_ctype = cap + 'Object'
+      self.ctype = '%s::%sObject' % (parent.ctype, cap)
+    else:
+      self.base_ctype = self.ctype = cap
     self.cbtype = '%sCallbacks' % cap
-    self.ctype = cap
     self.states = set()
     self.context_stack = []
     self.null_states = {}
@@ -292,6 +296,7 @@ class SchemaInfo(object):
     self.map_states = {}
     self.array_states = {}
     self.props_states = collections.defaultdict(list)
+    self.outf = cStringIO.StringIO()
 
 
 PrimitiveStateInfo = collections.namedtuple(
@@ -486,11 +491,8 @@ SOURCE_ENC_END_SCHEMA = """\
 }
 """
 
-SOURCE_ENC_PROP = """\
-  CHECK_GEN_KEY(\"{{prop_name}}\", {{len(prop_name)}});
-"""
-
 SOURCE_ENC_PROP_TYPE_FORMAT = """\
+  CHECK_GEN_KEY(\"{{prop_name}}\", {{len(prop_name)}});
 [[if ctype == 'bool':]]
   CHECK_GEN1(Bool, data->{{cident}});
 [[elif ctype == 'int32_t':]]
@@ -511,10 +513,14 @@ SOURCE_ENC_PROP_TYPE_FORMAT = """\
 """
 
 SOURCE_ENC_PROP_TYPE_REF = """\
-  CHECK_ENCODE(data->{{cident}}.get());
+  if (data->{{cident}}.get()) {
+    CHECK_GEN_KEY(\"{{prop_name}}\", {{len(prop_name)}});
+    CHECK_ENCODE(data->{{cident}}.get());
+  }
 """
 
 SOURCE_ENC_BEGIN_PROP_TYPE_ARRAY = """\
+  CHECK_GEN_KEY(\"{{prop_name}}\", {{len(prop_name)}});
   CHECK_GEN(StartArray);
   GEN_FOREACH({{ix}}, data->{{cident}}) {
 """
@@ -525,6 +531,7 @@ SOURCE_ENC_END_PROP_TYPE_ARRAY = """\
 """
 
 SOURCE_ENC_BEGIN_PROP_TYPE_OBJECT = """\
+  CHECK_GEN_KEY(\"{{prop_name}}\", {{len(prop_name)}});
   CHECK_GEN(StartMap);
 """
 
@@ -540,7 +547,6 @@ class EncodeService(service.Service):
     self.context_stack = []
     self.schema = None
     self.schema_level = 0
-    self.prop_type = ''
     self.decf = cStringIO.StringIO()
     self.deff = cStringIO.StringIO()
     super(EncodeService, self).__init__(service)
@@ -610,9 +616,6 @@ class EncodeService(service.Service):
 
   def BeginProperty(self, prop_name, prop):
     self.PushContext(prop_name, None)
-    self.prop_type = ''
-    self.deff.write(RunTemplateString(SOURCE_ENC_PROP, vars(),
-        output_indent=self.indent))
 
   def EndProperty(self, prop_name, prop):
     self.PopContext()
@@ -620,7 +623,6 @@ class EncodeService(service.Service):
   def OnPropertyTypeRef(self, prop_name, prop, ref):
     cident = self.cident
     is_array = self.is_array_state
-    self.prop_type = gapi_utils.WrapType('std::tr1::shared_ptr<%s>', ref)
     self.deff.write(RunTemplateString(SOURCE_ENC_PROP_TYPE_REF, vars(),
         output_indent=self.indent))
 
@@ -628,7 +630,6 @@ class EncodeService(service.Service):
     cident = self.cident
     is_array = self.is_array_state
     ctype = service.TYPE_DICT[(prop_type, prop_format)]
-    self.prop_type = ctype
     self.deff.write(RunTemplateString(SOURCE_ENC_PROP_TYPE_FORMAT, vars(),
         output_indent=self.indent))
 
@@ -642,15 +643,11 @@ class EncodeService(service.Service):
         output_indent=indent))
 
   def EndPropertyTypeArray(self, prop_name, prop, prop_items):
-    self.prop_type = gapi_utils.WrapType('std::vector<%s>', self.prop_type)
     self.PopContext()
     self.deff.write(RunTemplateString(SOURCE_ENC_END_PROP_TYPE_ARRAY, vars(),
         output_indent=self.indent))
 
   def BeginPropertyTypeObject(self, prop_name, prop):
-    if not self.prop_type:
-      self.prop_type = self.schema.ctype
-    self.prop_type += '::%sObject' % gapi_utils.CapWords(prop_name)
     cident = self.cident
     is_array = self.is_array_state
     self.PushContext(None, 'object')
@@ -661,6 +658,72 @@ class EncodeService(service.Service):
     self.deff.write(RunTemplateString(SOURCE_ENC_END_PROP_TYPE_OBJECT, vars(),
         output_indent=self.indent))
     self.PopContext()
+
+
+# CONSTRUCTOR/DESTRUCTOR #######################################################
+
+SOURCE_CONS_BEGIN_SCHEMA = """\
+{{self.schema.ctype}}::{{self.schema.base_ctype}}() {
+"""
+
+SOURCE_CONS_END_SCHEMA = """\
+}
+
+{{self.schema.ctype}}::~{{self.schema.base_ctype}}() {
+}
+
+"""
+
+SOURCE_CONS_PROP_TYPE_FORMAT = """\
+[[if not has_array:]]
+[[  if ctype == 'bool':]]
+  {{cident}} = false;
+[[  elif ctype in ('int32_t', 'uint32_t', 'int64_t', 'uint64_t'):]]
+  {{cident}} = 0;
+[[  elif ctype in ('float', 'double'):]]
+  {{cident}} = 0;
+[[]]
+"""
+
+
+class ConstructorService(service.Service):
+  def __init__(self, service, outf, options):
+    self.outf = outf
+    self.array_count = 0
+    self.schema_stack = []
+    super(ConstructorService, self).__init__(service)
+
+  @property
+  def schema(self):
+    if self.schema_stack:
+      return self.schema_stack[-1]
+    return None
+
+  @property
+  def has_array(self):
+    return self.array_count != 0
+
+  def BeginSchema(self, schema_name, schema):
+    self.schema_stack.append(SchemaInfo(schema_name, self.schema))
+    self.schema.outf.write(RunTemplateString(SOURCE_CONS_BEGIN_SCHEMA, vars()))
+
+  def EndSchema(self, schema_name, schema):
+    schema = self.schema
+    self.schema.outf.write(RunTemplateString(SOURCE_CONS_END_SCHEMA, vars()))
+    self.schema_stack.pop()
+    self.outf.write(schema.outf.getvalue())
+
+  def OnPropertyTypeFormat(self, prop_name, prop, prop_type, prop_format):
+    cident = gapi_utils.SnakeCase(prop_name)
+    has_array = self.has_array
+    ctype = service.TYPE_DICT[(prop_type, prop_format)]
+    self.schema.outf.write(RunTemplateString(SOURCE_CONS_PROP_TYPE_FORMAT, vars()))
+
+  def BeginPropertyTypeArray(self, prop_name, prop, prop_items):
+    self.array_count += 1
+
+  def EndPropertyTypeArray(self, prop_name, prop, prop_items):
+    self.array_count -= 1
 
 
 # SERVICE ######################################################################
@@ -698,6 +761,8 @@ class Service(service.Service):
     self.outfname = outfname
     self.options = options
     self.headerfname = headerfname
+    self.consf = cStringIO.StringIO()
+    self.conss = ConstructorService(service, self.consf, options)
     self.decf = cStringIO.StringIO()
     self.decs = DecodeService(service, self.decf, options)
     self.encf = cStringIO.StringIO()
@@ -705,66 +770,82 @@ class Service(service.Service):
     super(Service, self).__init__(service)
 
   def BeginService(self, name, version):
+    self.conss.BeginService(name, version)
     self.encs.BeginService(name, version)
     self.decs.BeginService(name, version)
 
   def EndService(self, name, version):
+    self.conss.EndService(name, version)
     self.encs.EndService(name, version)
     self.decs.EndService(name, version)
     with open(self.outfname, 'w') as outf:
       outf.write(RunTemplateString(SOURCE_HEAD, vars()))
+      outf.write(self.consf.getvalue())
       outf.write(self.decf.getvalue())
       outf.write(self.encf.getvalue())
       outf.write(RunTemplateString(SOURCE_FOOT, vars()))
 
   def BeginSchema(self, schema_name, schema):
+    self.conss.BeginSchema(schema_name, schema)
     self.encs.BeginSchema(schema_name, schema)
     self.decs.BeginSchema(schema_name, schema)
 
   def EndSchema(self, schema_name, schema):
+    self.conss.EndSchema(schema_name, schema)
     self.encs.EndSchema(schema_name, schema)
     self.decs.EndSchema(schema_name, schema)
 
   def BeginProperty(self, prop_name, prop):
+    self.conss.BeginProperty(prop_name, prop)
     self.encs.BeginProperty(prop_name, prop)
     self.decs.BeginProperty(prop_name, prop)
 
   def EndProperty(self, prop_name, prop):
+    self.conss.EndProperty(prop_name, prop)
     self.encs.EndProperty(prop_name, prop)
     self.decs.EndProperty(prop_name, prop)
 
   def OnPropertyComment(self, prop_name, prop, comment):
+    self.conss.OnPropertyComment(prop_name, prop, comment)
     self.encs.OnPropertyComment(prop_name, prop, comment)
     self.decs.OnPropertyComment(prop_name, prop, comment)
 
   def BeginPropertyType(self, prop_name, prop):
+    self.conss.BeginPropertyType(prop_name, prop)
     self.encs.BeginPropertyType(prop_name, prop)
     self.decs.BeginPropertyType(prop_name, prop)
 
   def EndPropertyType(self, prop_name, prop):
+    self.conss.EndPropertyType(prop_name, prop)
     self.encs.EndPropertyType(prop_name, prop)
     self.decs.EndPropertyType(prop_name, prop)
 
   def OnPropertyTypeFormat(self, prop_name, prop, prop_type, prop_format):
+    self.conss.OnPropertyTypeFormat(prop_name, prop, prop_type, prop_format)
     self.encs.OnPropertyTypeFormat(prop_name, prop, prop_type, prop_format)
     self.decs.OnPropertyTypeFormat(prop_name, prop, prop_type, prop_format)
 
   def OnPropertyTypeRef(self, prop_name, prop, ref):
+    self.conss.OnPropertyTypeRef(prop_name, prop, ref)
     self.encs.OnPropertyTypeRef(prop_name, prop, ref)
     self.decs.OnPropertyTypeRef(prop_name, prop, ref)
 
   def BeginPropertyTypeArray(self, prop_name, prop, prop_items):
+    self.conss.BeginPropertyTypeArray(prop_name, prop, prop_items)
     self.encs.BeginPropertyTypeArray(prop_name, prop, prop_items)
     self.decs.BeginPropertyTypeArray(prop_name, prop, prop_items)
 
   def EndPropertyTypeArray(self, prop_name, prop, prop_items):
+    self.conss.EndPropertyTypeArray(prop_name, prop, prop_items)
     self.encs.EndPropertyTypeArray(prop_name, prop, prop_items)
     self.decs.EndPropertyTypeArray(prop_name, prop, prop_items)
 
   def BeginPropertyTypeObject(self, prop_name, prop):
+    self.conss.BeginPropertyTypeObject(prop_name, prop)
     self.encs.BeginPropertyTypeObject(prop_name, prop)
     self.decs.BeginPropertyTypeObject(prop_name, prop)
 
   def EndPropertyTypeObject(self, prop_name, prop, schema_name):
+    self.conss.EndPropertyTypeObject(prop_name, prop, schema_name)
     self.encs.EndPropertyTypeObject(prop_name, prop, schema_name)
     self.decs.EndPropertyTypeObject(prop_name, prop, schema_name)

@@ -174,7 +174,6 @@ TEST(TypesTest, TestFailures) {
   }
 }
 
-/*
 TEST(TypesTest, TestGenEmpty) {
   test_types_schema::Types data;
   MemoryWriter writer;
@@ -182,15 +181,12 @@ TEST(TypesTest, TestGenEmpty) {
   test_types_schema::Encode(&writer, &data, &error);
   ASSERT_EQ(NULL, error.get()) << "Encode error: " << error->ToString();
 
-  printf("encoded: %s\n", std::string(writer.data().begin(), writer.data().end()).c_str());
-
   MemoryReader actual(writer.data());
   FileReader gold("test_types_gen.gold");
   int result = Compare(&actual, &gold, &error);
   ASSERT_EQ(NULL, error.get()) << "Compare error: " << error->ToString();
   EXPECT_EQ(0, result);
 }
-*/
 
 TEST(ArrayTypesTest, TestParse) {
   test_types_schema::ArrayTypes data;

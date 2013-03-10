@@ -122,8 +122,7 @@ int Compare(Reader* r1, Reader* r2, ErrorPtr* out_error) {
             std::string context2(&buffer2[std::max(0, i - kContextChars)],
                                  &buffer2[std::min(i + kContextChars, bufend2)]);
             out_error->reset(new MessageError(
-                  "Unequal, \"..." + context1 +
-                  "...\" != \"..." + context2 + "...\""));
+                  "Unequal, \n\"" + context1 + "\" != \n\"" + context2 + "\""));
             break;
           }
         }

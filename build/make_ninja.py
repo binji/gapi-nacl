@@ -291,10 +291,10 @@ def Code(w):
       command='./script/gapi.py $in -o $outbase $flags',
       description='GAPI-GEN $out')
 
-#  w.variable('base_ccflags', '-g')
-#  w.variable('base_cxxflags', '-g -std=c++0x')
-  w.variable('base_ccflags', '-g -std=c99 -O3')
-  w.variable('base_cxxflags', '-g -O3')
+  w.variable('base_ccflags', '-g')
+  w.variable('base_cxxflags', '-g -std=c++0x')
+#  w.variable('base_ccflags', '-g -std=c99 -O3')
+#  w.variable('base_cxxflags', '-g -O3')
 
   # Copy yajl headers
   yajl_headers = []

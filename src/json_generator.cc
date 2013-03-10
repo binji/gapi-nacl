@@ -44,7 +44,7 @@ bool JsonGenerator::GenUint32(uint32_t value, ErrorPtr* error) {
 
 bool JsonGenerator::GenInt64(int64_t value, ErrorPtr* error) {
   char buffer[32];
-  int length = snprintf(&buffer[0], 32, PRId64, value);
+  int length = snprintf(&buffer[0], 32, "%"PRId64, value);
   yajl_gen_status status = yajl_gen_string(
       handle_, reinterpret_cast<const unsigned char*>(buffer), length);
   SetErrorFromStatus(error, status);
@@ -53,7 +53,7 @@ bool JsonGenerator::GenInt64(int64_t value, ErrorPtr* error) {
 
 bool JsonGenerator::GenUint64(uint64_t value, ErrorPtr* error) {
   char buffer[32];
-  int length = snprintf(&buffer[0], 32, PRIu64, value);
+  int length = snprintf(&buffer[0], 32, "%"PRIu64, value);
   yajl_gen_status status = yajl_gen_string(
       handle_, reinterpret_cast<const unsigned char*>(buffer), length);
   SetErrorFromStatus(error, status);

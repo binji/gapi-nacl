@@ -44,6 +44,9 @@ HEADER_FOOT = """\
 
 HEADER_SCHEMA_HEAD = """\
 struct {{schema_name}} {
+  {{schema_name}}();
+  ~{{schema_name}}();
+
 """
 
 HEADER_SCHEMA_FOOT = """\
