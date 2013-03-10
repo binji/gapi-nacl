@@ -14,7 +14,8 @@ typedef std::tr1::shared_ptr<Error> ErrorPtr;
 
 class MessageError : public Error {
  public:
-  MessageError(const char* message);
+  explicit MessageError(const char* message);
+  explicit MessageError(const std::string& message);
   virtual std::string ToString() const;
 
  private:

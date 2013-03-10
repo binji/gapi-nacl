@@ -2,6 +2,7 @@
 #define IO_H_
 
 #include <stdio.h>
+#include <vector>
 #include "error.h"
 
 class Reader {
@@ -25,6 +26,7 @@ class Closer {
 class MemoryReader : public Reader {
  public:
   MemoryReader(const void* buf, size_t size);
+  explicit MemoryReader(const std::vector<char>& data);
   virtual size_t Read(void* buf, size_t count, ErrorPtr* error);
 
  private:
@@ -43,6 +45,19 @@ class FileReader : public Reader {
   FILE* file_;
 };
 
+class MemoryWriter : public Writer {
+ public:
+  MemoryWriter();
+  ~MemoryWriter();
+  virtual size_t Write(const void* buf, size_t count, ErrorPtr* error);
+
+  const std::vector<char>& data() const { return data_; }
+
+ private:
+  std::vector<char> data_;
+};
+
 size_t Copy(Writer* dst, Reader* src, ErrorPtr* error);
+int Compare(Reader* r1, Reader* r2, ErrorPtr* error);
 
 #endif  // IO_H_

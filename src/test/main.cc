@@ -5,6 +5,82 @@
 #include "out/gen/src/test/data/urlshortener_schema.h"
 #include "out/gen/src/test/data/test_types_schema.h"
 
+namespace {
+
+class ErrorReader : public Reader {
+ public:
+  ErrorReader(ErrorPtr error, size_t error_at)
+      : error_(error),
+        error_at_(error_at),
+        offs_(0) {
+  }
+
+  virtual size_t Read(void* buf, size_t count, ErrorPtr* error) {
+    if (offs_ + count > error_at_) {
+      size_t nwrote = error_at_ - offs_;
+      memset(buf, 0, nwrote);
+      if (error)
+        *error = error_;
+      offs_ += nwrote;
+      return nwrote;
+    } else {
+      memset(buf, 0, count);
+      offs_ += count;
+      return count;
+    }
+  }
+
+ private:
+  ErrorPtr error_;
+  size_t error_at_;
+  size_t offs_;
+};
+
+}  // namespace
+
+TEST(IOTest, Compare) {
+  ErrorPtr dummy_error1(new MessageError("dummy1"));
+  ErrorPtr dummy_error2(new MessageError("dummy2"));
+  struct TestCase {
+    size_t error_at_1;
+    ErrorPtr error1;
+    size_t error_at_2;
+    ErrorPtr error2;
+    int expected;
+    const char* error;
+  };
+  TestCase test_cases[] = {
+    { 0, EOFError, 0, EOFError, 0, NULL },
+    { 1000, EOFError, 0, EOFError, 1, NULL },
+    { 0, EOFError, 1000, EOFError, -1, NULL },
+    { 50000, EOFError, 0, EOFError, 1, NULL },
+    { 0, EOFError, 50000, EOFError, -1, NULL },
+    { 49999, EOFError, 50000, EOFError, -1, NULL },
+    { 50000, EOFError, 49999, EOFError, 1, NULL },
+    { 100, dummy_error1, 200, EOFError, -1, "dummy1" },
+    { 200, dummy_error1, 100, EOFError, 1, "dummy1" },
+    { 200, dummy_error1, 50000, dummy_error2, -1, "dummy1" },
+    { 200, dummy_error1, 300, dummy_error2, -1, "dummy1" },
+    { 50000, dummy_error1, 200, dummy_error2, 1, "dummy2" },
+    { 300, dummy_error1, 200, dummy_error2, 1, "dummy1" },
+  };
+
+  for (int i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]); ++i) {
+    TestCase& test_case = test_cases[i];
+    ErrorReader reader1(test_case.error1, test_case.error_at_1);
+    ErrorReader reader2(test_case.error2, test_case.error_at_2);
+    ErrorPtr compare_error;
+    int actual = Compare(&reader1, &reader2, &compare_error);
+    EXPECT_EQ(test_case.expected, actual) << "On test case: " << i;
+    if (test_case.error == NULL)
+      EXPECT_TRUE(compare_error.get() == NULL)
+          << "Unexpected error: " << compare_error->ToString() << "\n"
+          << "On test case: " << i;
+    else
+      EXPECT_STREQ(test_case.error, compare_error->ToString().c_str());
+  }
+}
+
 TEST(SimpleSchemaTest, TestParse) {
   simple_schema::StringCount data;
   char buffer[] = "{\"id\": \"foobar\", \"count\": \"123456\"}";
@@ -97,6 +173,24 @@ TEST(TypesTest, TestFailures) {
         << "Actual error: " << error_message;
   }
 }
+
+/*
+TEST(TypesTest, TestGenEmpty) {
+  test_types_schema::Types data;
+  MemoryWriter writer;
+  ErrorPtr error;
+  test_types_schema::Encode(&writer, &data, &error);
+  ASSERT_EQ(NULL, error.get()) << "Encode error: " << error->ToString();
+
+  printf("encoded: %s\n", std::string(writer.data().begin(), writer.data().end()).c_str());
+
+  MemoryReader actual(writer.data());
+  FileReader gold("test_types_gen.gold");
+  int result = Compare(&actual, &gold, &error);
+  ASSERT_EQ(NULL, error.get()) << "Compare error: " << error->ToString();
+  EXPECT_EQ(0, result);
+}
+*/
 
 TEST(ArrayTypesTest, TestParse) {
   test_types_schema::ArrayTypes data;

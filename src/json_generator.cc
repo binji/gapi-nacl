@@ -21,25 +21,25 @@ JsonGenerator::~JsonGenerator() {
 bool JsonGenerator::GenNull(ErrorPtr* error) {
   yajl_gen_status status = yajl_gen_null(handle_);
   SetErrorFromStatus(error, status);
-  return status != yajl_gen_status_ok;
+  return status == yajl_gen_status_ok;
 }
 
 bool JsonGenerator::GenBool(bool value, ErrorPtr* error) {
   yajl_gen_status status = yajl_gen_bool(handle_, value);
   SetErrorFromStatus(error, status);
-  return status != yajl_gen_status_ok;
+  return status == yajl_gen_status_ok;
 }
 
 bool JsonGenerator::GenInt32(int32_t value, ErrorPtr* error) {
   yajl_gen_status status = yajl_gen_integer(handle_, value);
   SetErrorFromStatus(error, status);
-  return status != yajl_gen_status_ok;
+  return status == yajl_gen_status_ok;
 }
 
 bool JsonGenerator::GenUint32(uint32_t value, ErrorPtr* error) {
   yajl_gen_status status = yajl_gen_integer(handle_, value);
   SetErrorFromStatus(error, status);
-  return status != yajl_gen_status_ok;
+  return status == yajl_gen_status_ok;
 }
 
 bool JsonGenerator::GenInt64(int64_t value, ErrorPtr* error) {
@@ -48,7 +48,7 @@ bool JsonGenerator::GenInt64(int64_t value, ErrorPtr* error) {
   yajl_gen_status status = yajl_gen_string(
       handle_, reinterpret_cast<const unsigned char*>(buffer), length);
   SetErrorFromStatus(error, status);
-  return status != yajl_gen_status_ok;
+  return status == yajl_gen_status_ok;
 }
 
 bool JsonGenerator::GenUint64(uint64_t value, ErrorPtr* error) {
@@ -57,57 +57,57 @@ bool JsonGenerator::GenUint64(uint64_t value, ErrorPtr* error) {
   yajl_gen_status status = yajl_gen_string(
       handle_, reinterpret_cast<const unsigned char*>(buffer), length);
   SetErrorFromStatus(error, status);
-  return status != yajl_gen_status_ok;
+  return status == yajl_gen_status_ok;
 }
 
 bool JsonGenerator::GenFloat(float value, ErrorPtr* error) {
   yajl_gen_status status = yajl_gen_double(handle_, value);
   SetErrorFromStatus(error, status);
-  return status != yajl_gen_status_ok;
+  return status == yajl_gen_status_ok;
 }
 
 bool JsonGenerator::GenDouble(double value, ErrorPtr* error) {
   yajl_gen_status status = yajl_gen_double(handle_, value);
   SetErrorFromStatus(error, status);
-  return status != yajl_gen_status_ok;
+  return status == yajl_gen_status_ok;
 }
 
 bool JsonGenerator::GenString(const char* s, size_t length, ErrorPtr* error) {
   yajl_gen_status status = yajl_gen_string(
       handle_, reinterpret_cast<const unsigned char*>(s), length);
   SetErrorFromStatus(error, status);
-  return status != yajl_gen_status_ok;
+  return status == yajl_gen_status_ok;
 }
 
 bool JsonGenerator::GenString(const std::string& s, ErrorPtr* error) {
   yajl_gen_status status = yajl_gen_string(
       handle_, reinterpret_cast<const unsigned char*>(s.data()), s.length());
   SetErrorFromStatus(error, status);
-  return status != yajl_gen_status_ok;
+  return status == yajl_gen_status_ok;
 }
 
 bool JsonGenerator::GenStartMap(ErrorPtr* error) {
   yajl_gen_status status = yajl_gen_map_open(handle_);
   SetErrorFromStatus(error, status);
-  return status != yajl_gen_status_ok;
+  return status == yajl_gen_status_ok;
 }
 
 bool JsonGenerator::GenEndMap(ErrorPtr* error) {
   yajl_gen_status status = yajl_gen_map_close(handle_);
   SetErrorFromStatus(error, status);
-  return status != yajl_gen_status_ok;
+  return status == yajl_gen_status_ok;
 }
 
 bool JsonGenerator::GenStartArray(ErrorPtr* error) {
   yajl_gen_status status = yajl_gen_array_open(handle_);
   SetErrorFromStatus(error, status);
-  return status != yajl_gen_status_ok;
+  return status == yajl_gen_status_ok;
 }
 
 bool JsonGenerator::GenEndArray(ErrorPtr* error) {
   yajl_gen_status status = yajl_gen_array_close(handle_);
   SetErrorFromStatus(error, status);
-  return status != yajl_gen_status_ok;
+  return status == yajl_gen_status_ok;
 }
 
 void JsonGenerator::SetErrorFromStatus(ErrorPtr* error,

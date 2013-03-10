@@ -6,6 +6,10 @@ MessageError::MessageError(const char* message)
     : message_(message) {
 }
 
+MessageError::MessageError(const std::string& message)
+    : message_(message) {
+}
+
 std::string MessageError::ToString() const {
   return message_;
 }
