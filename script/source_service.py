@@ -476,8 +476,8 @@ bool Encode(JsonGenerator* g, {{self.schema.ctype}}* data, ErrorPtr* error);
 
 SOURCE_ENC_BEGIN_SCHEMA = """\
 
-void Encode(Writer* src, {{self.schema.ctype}}* data, ErrorPtr* error) {
-  JsonGenerator g(src);
+void Encode(Writer* src, {{self.schema.ctype}}* data, const JsonGeneratorOptions& options, ErrorPtr* error) {
+  JsonGenerator g(src, options);
   Encode(&g, data, error);
 }
 

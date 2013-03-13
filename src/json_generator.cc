@@ -2,16 +2,32 @@
 #define __STDC_FORMAT_MACROS  // For PRI* macros
 #include <inttypes.h>
 
+JsonGeneratorOptions::JsonGeneratorOptions()
+    : beautify(false),
+      escape_solidus(false),
+      validate_utf8(true),
+      indent_string("") {
+}
+
 JsonGenerator::JsonGenerator(Writer* dst)
     : dst_(dst) {
+  Init(JsonGeneratorOptions());
+}
+
+JsonGenerator::JsonGenerator(Writer* dst, const JsonGeneratorOptions& options)
+    : dst_(dst) {
+  Init(options);
+}
+
+void JsonGenerator::Init(const JsonGeneratorOptions& options) {
   // NULL => use the default C alloc funcs (malloc, realloc, free).
   handle_ = yajl_gen_alloc(NULL);
   yajl_gen_config(handle_, yajl_gen_print_callback, ThunkOnPrint, this);
-  // TODO(binji): allow configuration
-  yajl_gen_config(handle_, yajl_gen_beautify, 0);
-  yajl_gen_config(handle_, yajl_gen_indent_string, "  ");
-  yajl_gen_config(handle_, yajl_gen_escape_solidus, 0);
-  yajl_gen_config(handle_, yajl_gen_validate_utf8, 1);
+  yajl_gen_config(handle_, yajl_gen_beautify, options.beautify);
+  yajl_gen_config(handle_, yajl_gen_indent_string,
+                  options.indent_string.c_str());
+  yajl_gen_config(handle_, yajl_gen_escape_solidus, options.escape_solidus);
+  yajl_gen_config(handle_, yajl_gen_validate_utf8, options.validate_utf8);
 }
 
 JsonGenerator::~JsonGenerator() {

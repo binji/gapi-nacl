@@ -8,9 +8,19 @@
 #include "io.h"
 #include "yajl/yajl_gen.h"
 
+struct JsonGeneratorOptions {
+  JsonGeneratorOptions();
+
+  bool beautify;
+  bool escape_solidus;
+  bool validate_utf8;
+  std::string indent_string;
+};
+
 class JsonGenerator {
  public:
   explicit JsonGenerator(Writer* dst);
+  JsonGenerator(Writer* dst, const JsonGeneratorOptions& options);
   ~JsonGenerator();
 
   bool GenNull(ErrorPtr* error);
@@ -29,6 +39,7 @@ class JsonGenerator {
   bool GenEndArray(ErrorPtr* error);
 
  private:
+  void Init(const JsonGeneratorOptions& options);
   void SetErrorFromStatus(ErrorPtr* error, yajl_gen_status status);
   static void ThunkOnPrint(void* ctx, const char* s, size_t length);
   void OnPrint(const char* s, size_t length);

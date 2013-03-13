@@ -19,6 +19,8 @@ HEADER_HEAD = """\
 #include "error.h"
 #include "io.h"
 
+class JsonGeneratorOptions;
+
 [[if self.options.namespace:]]
 namespace {{self.options.namespace}} {
 [[]]
@@ -29,7 +31,7 @@ struct {{schema}};
 
 [[for schema in self.toplevel_schemas:]]
 void Decode(Reader* src, {{schema}}* out_data, ErrorPtr* error);
-void Encode(Writer* src, {{schema}}* data, ErrorPtr* error);
+void Encode(Writer* src, {{schema}}* data, const JsonGeneratorOptions& options, ErrorPtr* error);
 [[]]
 
 """

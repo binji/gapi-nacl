@@ -43,13 +43,15 @@ size_t FileReader::Read(void* buf, size_t count, ErrorPtr* error) {
     return 0;
   }
 
-  size_t nread = fread(buf, 1, count, file_);
-  if (error) {
-    if (feof(file_))
+  if (feof(file_)) {
+    if (error)
       *error = EOFError;
-    else if (ferror(file_))
-      error->reset(new MessageError("Error reading file"));
+    return 0;
   }
+
+  size_t nread = fread(buf, 1, count, file_);
+  if (error && ferror(file_))
+    error->reset(new MessageError("Error reading file"));
   return nread;
 }
 

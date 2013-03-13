@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
 #include "io.h"
+#include "json_generator.h"
 #include "json_parser.h"
 #include "out/gen/src/test/data/simple_schema.h"
 #include "out/gen/src/test/data/urlshortener_schema.h"
@@ -178,11 +179,14 @@ TEST(TypesTest, TestGenEmpty) {
   test_types_schema::Types data;
   MemoryWriter writer;
   ErrorPtr error;
-  test_types_schema::Encode(&writer, &data, &error);
+  JsonGeneratorOptions options;
+  options.beautify = true;
+  options.indent_string = "  ";
+  test_types_schema::Encode(&writer, &data, options, &error);
   ASSERT_EQ(NULL, error.get()) << "Encode error: " << error->ToString();
 
   MemoryReader actual(writer.data());
-  FileReader gold("test_types_gen.gold");
+  FileReader gold("test_types_gen_empty.gold");
   int result = Compare(&actual, &gold, &error);
   ASSERT_EQ(NULL, error.get()) << "Compare error: " << error->ToString();
   EXPECT_EQ(0, result);
