@@ -82,7 +82,7 @@ TEST(IOTest, Compare) {
   }
 }
 
-TEST(SimpleSchemaTest, TestParse) {
+TEST(SimpleSchemaTest, Parse) {
   simple_schema::StringCount data;
   char buffer[] = "{\"id\": \"foobar\", \"count\": \"123456\"}";
   MemoryReader reader(&buffer[0], strlen(buffer));
@@ -93,7 +93,7 @@ TEST(SimpleSchemaTest, TestParse) {
   EXPECT_EQ(123456, data.count);
 }
 
-TEST(UrlshortenerSchemaTest, TestParse) {
+TEST(UrlshortenerSchemaTest, Parse) {
   urlshortener_schema::Url data;
   FileReader reader("urlshortener_response.json");
   ErrorPtr error;
@@ -111,7 +111,7 @@ TEST(UrlshortenerSchemaTest, TestParse) {
   EXPECT_STREQ("Chrome", data.analytics->all_time->browsers[0]->id.c_str());
 }
 
-TEST(TypesTest, TestParse) {
+TEST(TypesTest, Parse) {
   test_types_schema::Types data;
   FileReader reader("test_types_data.json");
   ErrorPtr error;
@@ -133,7 +133,7 @@ TEST(TypesTest, TestParse) {
   EXPECT_FLOAT_EQ(3.14159, data.my_object.my_object_float);
 }
 
-TEST(TypesTest, TestFailures) {
+TEST(TypesTest, Failures) {
   struct TestCase {
     const char* json;
     const char* error;
@@ -175,7 +175,7 @@ TEST(TypesTest, TestFailures) {
   }
 }
 
-TEST(TypesTest, TestGenEmpty) {
+TEST(TypesTest, GenEmpty) {
   test_types_schema::Types data;
   MemoryWriter writer;
   ErrorPtr error;
@@ -192,7 +192,7 @@ TEST(TypesTest, TestGenEmpty) {
   EXPECT_EQ(0, result);
 }
 
-TEST(ArrayTypesTest, TestParse) {
+TEST(ArrayTypesTest, Parse) {
   test_types_schema::ArrayTypes data;
   FileReader reader("test_array_types_data.json");
   ErrorPtr error;
@@ -239,7 +239,7 @@ TEST(ArrayTypesTest, TestParse) {
   EXPECT_FLOAT_EQ(1e9, data.my_object_array[2].my_object_float);
 }
 
-TEST(ArrayTypesTest, TestFailures) {
+TEST(ArrayTypesTest, Failures) {
   struct TestCase {
     const char* json;
     const char* error;
@@ -267,7 +267,7 @@ TEST(ArrayTypesTest, TestFailures) {
   }
 }
 
-TEST(ComplexTypesTest, TestParse) {
+TEST(ComplexTypesTest, Parse) {
   const char* test_cases[] = {
     "{\"twoply\": []}",
     "{\"twoply\": [[]]}",
