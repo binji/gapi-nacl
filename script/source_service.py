@@ -492,6 +492,7 @@ SOURCE_ENC_END_SCHEMA = """\
 """
 
 SOURCE_ENC_PROP_TYPE_FORMAT = """\
+[[if not is_array:]]
   CHECK_GEN_KEY(\"{{prop_name}}\", {{len(prop_name)}});
 [[if ctype == 'bool':]]
   CHECK_GEN1(Bool, data->{{cident}});
@@ -514,13 +515,17 @@ SOURCE_ENC_PROP_TYPE_FORMAT = """\
 
 SOURCE_ENC_PROP_TYPE_REF = """\
   if (data->{{cident}}.get()) {
+[[if not is_array:]]
     CHECK_GEN_KEY(\"{{prop_name}}\", {{len(prop_name)}});
+[[]]
     CHECK_ENCODE(data->{{cident}}.get());
   }
 """
 
 SOURCE_ENC_BEGIN_PROP_TYPE_ARRAY = """\
+[[if not is_array:]]
   CHECK_GEN_KEY(\"{{prop_name}}\", {{len(prop_name)}});
+[[]]
   CHECK_GEN(StartArray);
   GEN_FOREACH({{ix}}, data->{{cident}}) {
 """
@@ -531,7 +536,9 @@ SOURCE_ENC_END_PROP_TYPE_ARRAY = """\
 """
 
 SOURCE_ENC_BEGIN_PROP_TYPE_OBJECT = """\
+[[if not is_array:]]
   CHECK_GEN_KEY(\"{{prop_name}}\", {{len(prop_name)}});
+[[]]
   CHECK_GEN(StartMap);
 """
 

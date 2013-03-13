@@ -305,6 +305,52 @@ TEST(ComplexTypesTest, Parse) {
   }
 }
 
+TEST(ComplexTypesTest, Gen) {
+  test_types_schema::ComplexTypes data;
+  data.array_of_nested.resize(2);
+  data.array_of_nested[0].x.y = 100;
+  data.array_of_nested[1].x.y = -100;
+
+  data.threeply.resize(3);
+  for (int i = 0; i < 3; ++i)
+    data.threeply[i].resize(3);
+  for (int i = 0; i < 3; ++i)
+  for (int j = 0; j < 3; ++j)
+    data.threeply[i][j].resize(3);
+  for (int i = 0; i < 3; ++i)
+  for (int j = 0; j < 3; ++j)
+  for (int k = 0; k < 3; ++k)
+    data.threeply[i][j][k] = i + j + k;
+
+  data.twoply.resize(2);
+  for (int i = 0; i < 2; ++i)
+    data.twoply[i].resize(2);
+  for (int i = 0; i < 2; ++i)
+  for (int j = 0; j < 2; ++j)
+    data.twoply[i][j] = i * j;
+
+  data.twoply_objects.resize(2);
+  for (int i = 0; i < 2; ++i)
+    data.twoply_objects[i].resize(2);
+  for (int i = 0; i < 2; ++i)
+  for (int j = 0; j < 2; ++j)
+    data.twoply_objects[i][j].x = i * 10 + j;
+
+  MemoryWriter writer;
+  ErrorPtr error;
+  JsonGeneratorOptions options;
+  options.beautify = true;
+  options.indent_string = "  ";
+  test_types_schema::Encode(&writer, &data, options, &error);
+  ASSERT_EQ(NULL, error.get()) << "Encode error: " << error->ToString();
+
+  MemoryReader actual(writer.data());
+  FileReader gold("complex_types_gen.gold");
+  int result = Compare(&actual, &gold, &error);
+  ASSERT_EQ(NULL, error.get()) << "Compare error: " << error->ToString();
+  EXPECT_EQ(0, result);
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
