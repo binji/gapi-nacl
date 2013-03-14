@@ -327,7 +327,7 @@ TEST(ComplexTypesTest, Gen) {
     data.twoply[i].resize(2);
   for (int i = 0; i < 2; ++i)
   for (int j = 0; j < 2; ++j)
-    data.twoply[i][j] = i * j;
+    data.twoply[i][j] = (i+1) * (j+1);
 
   data.twoply_objects.resize(2);
   for (int i = 0; i < 2; ++i)
@@ -335,6 +335,19 @@ TEST(ComplexTypesTest, Gen) {
   for (int i = 0; i < 2; ++i)
   for (int j = 0; j < 2; ++j)
     data.twoply_objects[i][j].x = i * 10 + j;
+
+  data.twoply_refs.resize(2);
+  for (int i = 0; i < 2; ++i)
+    data.twoply_refs[i].resize(2);
+  for (int i = 0; i < 2; ++i)
+  for (int j = 0; j < 2; ++j) {
+    char buffer[10];
+    snprintf(&buffer[0], 9, "%d + %d", i + 1, j + 1);
+    buffer[9] = 0;
+    data.twoply_refs[i][j].reset(new test_types_schema::DummyRef());
+    data.twoply_refs[i][j]->value1 = &buffer[0];
+    data.twoply_refs[i][j]->value2 = i + j + 2;
+  }
 
   MemoryWriter writer;
   ErrorPtr error;
