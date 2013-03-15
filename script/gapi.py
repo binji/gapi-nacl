@@ -1,13 +1,14 @@
 #!/usr/bin/env python
+import cStringIO
 import json
 import optparse
 import os
 import sys
 import urllib2
 
+import cpp_header_generator
+import cpp_source_generator
 import service
-import header_service
-import source_service
 
 
 DISCOVERY_API = 'https://www.googleapis.com/discovery/v1/apis'
@@ -41,22 +42,34 @@ def main(args):
     if not options.outbasename:
       parser.error('no output file given.')
     with open(args[0]) as inf:
-      service = json.load(inf)
-    inputs.append((options.outbasename, service))
+      service_json = json.load(inf)
+    inputs.append((options.outbasename, service_json))
   else:
     # Read and generate for all descovery APIs.
     d = ReadCachedJson(DISCOVERY_API, API_JSON)
     for item in d['items']:
       basename = 'out/%s_%s' % (item['name'], item['version'])
-      service = ReadCachedJson(item['discoveryRestUrl'], json_name)
-      inputs.append((basename, service))
+      service_json = ReadCachedJson(item['discoveryRestUrl'], json_name)
+      inputs.append((basename, service_json))
 
-  for basename, service in inputs:
+  for basename, service_json in inputs:
     basename = options.outbasename
     header_name = basename + '.h'
     source_name = basename + '.cc'
-    header_service.Service(service, header_name, options).Run()
-    source_service.Service(service, source_name, header_name, options).Run()
+    s = service.Service(service_json)
+    Generate(cpp_header_generator, header_name, s,
+             header_name=header_name,
+             namespace=options.namespace)
+    Generate(cpp_source_generator, source_name, s,
+             header_name=header_name,
+             namespace=options.namespace)
+
+
+def Generate(generator, outfname, service, **kwargs):
+  outf = cStringIO.StringIO()
+  generator.Generate(outf, service, **kwargs)
+  with open(outfname, 'w') as real_outf:
+    real_outf.write(outf.getvalue())
 
 
 if __name__ == '__main__':

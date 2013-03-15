@@ -337,12 +337,15 @@ def Code(w):
     outs = [outbase + ext for ext in ('.h', '.cc')]
     w.build(outs, 'gapi-gen', name,
         implicit=[
+            'script/cpp_header_generator.py',
+            'script/cpp_json_constructor_generator.py',
+            'script/cpp_json_decoder_generator.py',
+            'script/cpp_json_encoder_generator.py',
+            'script/cpp_source_generator.py',
             'script/easy_template.py',
             'script/gapi.py',
             'script/gapi_utils.py',
-            'script/header_service.py',
             'script/service.py',
-            'script/source_service.py',
         ],
         variables={'outbase': outbase,
                    'flags': '-n %s' % FilenameToNamespace(name)})
