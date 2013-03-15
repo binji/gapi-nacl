@@ -42,7 +42,7 @@ class Service(object):
       for prop_name, prop in sorted(schema['properties'].iteritems()):
         self.OnProperty(prop_name, prop)
     if 'additionalProperties' in schema:
-      prop_name = '_additionalProperties'
+      prop_name = None
       prop = schema['additionalProperties']
       self.OnProperty(prop_name, prop)
     self.EndSchema(schema_name, schema)

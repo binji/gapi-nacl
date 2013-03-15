@@ -57,6 +57,10 @@ HEADER_SCHEMA_FOOT = """\
 """
 
 
+ADDITIONAL_PROPERTIES_TYPE_NAME = '_additionalPropertiesType';
+ADDITIONAL_PROPERTIES_MEMBER_NAME = '_additional_properties';
+
+
 def WriteWrappedComment(f, s, indent, length):
   lines = gapi_utils.WrapLine(s, length - (len(indent) + len('// ')))
   for line in lines:
@@ -107,10 +111,21 @@ class Service(service.Service):
     self.prop_type = ''
 
   def EndProperty(self, prop_name, prop):
-    self.f.write('%s%s %s;\n\n' % (
-        self.indent,
-        self.prop_type,
-        gapi_utils.SnakeCase(prop_name)))
+    if prop_name:
+      self.f.write('%s%s %s;\n\n' % (
+          self.indent,
+          self.prop_type,
+          gapi_utils.SnakeCase(prop_name)))
+    else:
+      # additionalProperties
+      self.f.write('%stypedef std::map<std::string, %s> %s;\n'
+                   '%s%s %s;\n\n' % (
+          self.indent,
+          self.prop_type,
+          ADDITIONAL_PROPERTIES_TYPE_NAME,
+          self.indent,
+          ADDITIONAL_PROPERTIES_TYPE_NAME,
+          ADDITIONAL_PROPERTIES_MEMBER_NAME))
 
   def OnPropertyComment(self, prop_name, prop, comment):
     for line in comment.splitlines():

@@ -1,10 +1,13 @@
 import collections
 import cStringIO
-import itertools
 
 from easy_template import RunTemplateString
 import gapi_utils
 import service
+
+
+ADDITIONAL_PROPERTIES_TYPE_NAME = '_additionalPropertiesType';
+ADDITIONAL_PROPERTIES_MEMBER_NAME = '_additional_properties';
 
 
 SOURCE_SCHEMA_DECL = """\
@@ -156,19 +159,12 @@ int {{self.schema.cbtype}}::OnMapKey(JsonParser* p, const unsigned char* s, size
   switch (state_) {
 [[for state, info in sorted(self.schema.props_states.iteritems()):]]
     case {{state}}:
-      switch (s[0]) {
-[[  for first_char, group in groupby(sorted(info), lambda i:i.name[0]):]]
-        case '{{first_char}}':
-[[  # Sort group in reverse order of name length.]]
-[[    group = sorted(group, lambda x,y: cmp(len(y.name), len(x.name)))]]
-[[    for group_info in group:]]
-          CHECK_MAP_KEY("{{group_info.name}}", {{len(group_info.name)}}, {{group_info.next_state}});
-[[    ]]
-          break;
-[[  ]]
-        default: break;
-      }
+[[  for name, next_state in sorted(info):]]
+      CHECK_MAP_KEY("{{name}}", {{len(name)}}, {{next_state}});
+[[  if self.schema.props_states_addl_props[state]:]]
+      // Create additional property with this key.
 [[]]
+      break;
     default: break;
   }
   error->reset(new MessageError("Unknown map key"));
@@ -296,6 +292,7 @@ class SchemaInfo(object):
     self.map_states = {}
     self.array_states = {}
     self.props_states = collections.defaultdict(list)
+    self.props_states_addl_props = collections.defaultdict(bool)
     self.outf = cStringIO.StringIO()
 
 
@@ -374,6 +371,8 @@ class DecodeService(service.Service):
     return result
 
   def PushContext(self, name, typ):
+    if name is None and typ is None:
+      name = ADDITIONAL_PROPERTIES_MEMBER_NAME
     self.schema.context_stack.append((name, typ))
     self.schema.states.add(self.state)
 
@@ -392,7 +391,6 @@ class DecodeService(service.Service):
   def EndSchema(self, schema_name, schema):
     self.schema_level -= 1
     if self.schema_level == 0:
-      groupby = itertools.groupby
       self.decf.write(RunTemplateString(SOURCE_SCHEMA_DECL, vars()))
       self.deff.write(RunTemplateString(SOURCE_SCHEMA_DEF, vars()))
       self.schema = None
@@ -401,7 +399,9 @@ class DecodeService(service.Service):
     current_state = self.state
     self.PushContext(prop_name, None)
     next_state = self.state
-    self.schema.props_states[current_state].append(PropStateInfo(prop_name, next_state))
+    self.schema.props_states_addl_props[current_state] |= prop_name is None
+    if prop_name:
+      self.schema.props_states[current_state].append(PropStateInfo(prop_name, next_state))
     self.prop_type = ''
 
   def EndProperty(self, prop_name, prop):
@@ -493,41 +493,51 @@ SOURCE_ENC_END_SCHEMA = """\
 
 SOURCE_ENC_PROP_TYPE_FORMAT = """\
 [[if not is_array:]]
-  CHECK_GEN_KEY(\"{{prop_name}}\", {{len(prop_name)}});
+  CHECK_GEN_KEY({{prop_key}}, {{prop_key_len}});
 [[if ctype == 'bool':]]
-  CHECK_GEN1(Bool, data->{{cident}});
+  CHECK_GEN1(Bool, {{cident}});
 [[elif ctype == 'int32_t':]]
-  CHECK_GEN1(Int32, data->{{cident}});
+  CHECK_GEN1(Int32, {{cident}});
 [[elif ctype == 'uint32_t':]]
-  CHECK_GEN1(Uint32, data->{{cident}});
+  CHECK_GEN1(Uint32, {{cident}});
 [[elif ctype == 'int64_t':]]
-  CHECK_GEN1(Int64, data->{{cident}});
+  CHECK_GEN1(Int64, {{cident}});
 [[elif ctype == 'uint64_t':]]
-  CHECK_GEN1(Uint64, data->{{cident}});
+  CHECK_GEN1(Uint64, {{cident}});
 [[elif ctype == 'float':]]
-  CHECK_GEN1(Float, data->{{cident}});
+  CHECK_GEN1(Float, {{cident}});
 [[elif ctype == 'double':]]
-  CHECK_GEN1(Double, data->{{cident}});
+  CHECK_GEN1(Double, {{cident}});
 [[elif ctype == 'std::string':]]
-  CHECK_GEN_STRING(data->{{cident}});
+  CHECK_GEN_STRING({{cident}});
 [[]]
 """
 
+SOURCE_ENC_BEGIN_ADDL_PROPS = """\
+  for ({{addl_prop_type}}::const_iterator iter = {{cident}}.begin();
+      iter != {{cident}}.end();
+      ++iter) {
+"""
+
+SOURCE_ENC_END_ADDL_PROPS = """\
+  }
+"""
+
 SOURCE_ENC_PROP_TYPE_REF = """\
-  if (data->{{cident}}.get()) {
+  if ({{cident}}.get()) {
 [[if not is_array:]]
-    CHECK_GEN_KEY(\"{{prop_name}}\", {{len(prop_name)}});
+    CHECK_GEN_KEY({{prop_key}}, {{prop_key_len}});
 [[]]
-    CHECK_ENCODE(data->{{cident}}.get());
+    CHECK_ENCODE({{cident}}.get());
   }
 """
 
 SOURCE_ENC_BEGIN_PROP_TYPE_ARRAY = """\
 [[if not is_array:]]
-  CHECK_GEN_KEY(\"{{prop_name}}\", {{len(prop_name)}});
+  CHECK_GEN_KEY({{prop_key}}, {{prop_key_len}});
 [[]]
   CHECK_GEN(StartArray);
-  GEN_FOREACH({{ix}}, data->{{cident}}) {
+  GEN_FOREACH({{ix}}, {{cident}}) {
 """
 
 SOURCE_ENC_END_PROP_TYPE_ARRAY = """\
@@ -537,7 +547,7 @@ SOURCE_ENC_END_PROP_TYPE_ARRAY = """\
 
 SOURCE_ENC_BEGIN_PROP_TYPE_OBJECT = """\
 [[if not is_array:]]
-  CHECK_GEN_KEY(\"{{prop_name}}\", {{len(prop_name)}});
+  CHECK_GEN_KEY({{prop_key}}, {{prop_key_len}});
 [[]]
   CHECK_GEN(StartMap);
 """
@@ -552,11 +562,16 @@ class EncodeService(service.Service):
     self.outf = outf
     self.options = options
     self.context_stack = []
-    self.schema = None
-    self.schema_level = 0
+    self.schema_stack = []
     self.decf = cStringIO.StringIO()
     self.deff = cStringIO.StringIO()
     super(EncodeService, self).__init__(service)
+
+  @property
+  def schema(self):
+    if self.schema_stack:
+      return self.schema_stack[-1]
+    return None
 
   @property
   def cident(self):
@@ -573,20 +588,21 @@ class EncodeService(service.Service):
   @property
   def indent(self):
     result = ''
-    for _, typ, _ in self.context_stack:
-      if typ == 'array':
+    for name, typ, _ in self.context_stack:
+      if typ == 'array' or name == ADDITIONAL_PROPERTIES_MEMBER_NAME:
         result += '  '
     return result
 
   def CIdentFromContextStack(self, context_stack):
     if not context_stack:
       return ''
-    result = ''
+    result = 'data->'
     prev_typ, prev_ix = None, None
     for name, typ, ix in context_stack:
       if name: result += gapi_utils.SnakeCase(name)
       if typ == 'array': result += '[%s]' % ix
       elif typ == 'object': result += '.'
+      elif typ == 'additional_properties': result = 'iter->second'
       prev_typ, prev_ix = typ, ix
     return result
 
@@ -599,6 +615,8 @@ class EncodeService(service.Service):
           next_ix = chr(ord(prev_ix) + 1)
         else:
           next_ix = 'i'
+    if name is None and typ is None:
+      name = ADDITIONAL_PROPERTIES_MEMBER_NAME
     self.context_stack.append((name, typ, next_ix))
 
   def PopContext(self):
@@ -609,38 +627,57 @@ class EncodeService(service.Service):
     self.outf.write(self.deff.getvalue())
 
   def BeginSchema(self, schema_name, schema):
-    if self.schema_level == 0:
-      self.schema = SchemaInfo(schema_name, self.schema)
+    self.schema_stack.append(SchemaInfo(schema_name, self.schema))
+    if len(self.schema_stack) == 1:
       self.decf.write(RunTemplateString(SOURCE_ENC_DECL_SCHEMA, vars()))
       self.deff.write(RunTemplateString(SOURCE_ENC_BEGIN_SCHEMA, vars()))
-    self.schema_level += 1
 
   def EndSchema(self, schema_name, schema):
-    self.schema_level -= 1
-    if self.schema_level == 0:
+    self.schema_stack.pop()
+    if len(self.schema_stack) == 0:
       self.deff.write(RunTemplateString(SOURCE_ENC_END_SCHEMA, vars()))
-      self.schema = None
 
   def BeginProperty(self, prop_name, prop):
+    indent = self.indent
     self.PushContext(prop_name, None)
+    if not prop_name:
+      cident = self.cident
+      addl_prop_type = '%s::%s' % (self.schema.ctype,
+                                   ADDITIONAL_PROPERTIES_TYPE_NAME)
+      self.deff.write(RunTemplateString(SOURCE_ENC_BEGIN_ADDL_PROPS, vars(),
+                                        output_indent=indent))
+      self.PushContext(prop_name, 'additional_properties')
 
   def EndProperty(self, prop_name, prop):
     self.PopContext()
+    if not prop_name:
+      self.PopContext()
+      self.deff.write(RunTemplateString(SOURCE_ENC_END_ADDL_PROPS, vars(),
+                                        output_indent=self.indent))
+
+  @staticmethod
+  def _GetPropKeyAndLen(prop_name):
+    if prop_name:
+      return '"%s"' % prop_name, str(len(prop_name))
+    return 'iter->first.c_str()', 'iter->first.length()'
 
   def OnPropertyTypeRef(self, prop_name, prop, ref):
+    prop_key, prop_key_len = self._GetPropKeyAndLen(prop_name)
     cident = self.cident
     is_array = self.is_array_state
     self.deff.write(RunTemplateString(SOURCE_ENC_PROP_TYPE_REF, vars(),
         output_indent=self.indent))
 
   def OnPropertyTypeFormat(self, prop_name, prop, prop_type, prop_format):
+    prop_key, prop_key_len = self._GetPropKeyAndLen(prop_name)
     cident = self.cident
-    is_array = self.is_array_state
     ctype = service.TYPE_DICT[(prop_type, prop_format)]
+    is_array = self.is_array_state
     self.deff.write(RunTemplateString(SOURCE_ENC_PROP_TYPE_FORMAT, vars(),
         output_indent=self.indent))
 
   def BeginPropertyTypeArray(self, prop_name, prop, prop_items):
+    prop_key, prop_key_len = self._GetPropKeyAndLen(prop_name)
     cident = self.cident
     indent = self.indent
     is_array = self.is_array_state
@@ -655,6 +692,7 @@ class EncodeService(service.Service):
         output_indent=self.indent))
 
   def BeginPropertyTypeObject(self, prop_name, prop):
+    prop_key, prop_key_len = self._GetPropKeyAndLen(prop_name)
     cident = self.cident
     is_array = self.is_array_state
     self.PushContext(None, 'object')
@@ -721,10 +759,12 @@ class ConstructorService(service.Service):
     self.outf.write(schema.outf.getvalue())
 
   def OnPropertyTypeFormat(self, prop_name, prop, prop_type, prop_format):
-    cident = gapi_utils.SnakeCase(prop_name)
-    has_array = self.has_array
-    ctype = service.TYPE_DICT[(prop_type, prop_format)]
-    self.schema.outf.write(RunTemplateString(SOURCE_CONS_PROP_TYPE_FORMAT, vars()))
+    if prop_name:
+      cident = gapi_utils.SnakeCase(prop_name)
+      has_array = self.has_array
+      ctype = service.TYPE_DICT[(prop_type, prop_format)]
+      self.schema.outf.write(RunTemplateString(SOURCE_CONS_PROP_TYPE_FORMAT,
+                             vars()))
 
   def BeginPropertyTypeArray(self, prop_name, prop, prop_items):
     self.array_count += 1
