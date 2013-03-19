@@ -63,7 +63,7 @@ class GenerateSchemaCallbacks(service.ServiceCallbacks):
       WriteWrappedComment(self.outf, line, indent, 80)
     self.outf.write('%s%s %s;\n' % (
         indent,
-        prop.prop_type.ctype,
+        prop.ctype,
         prop.base_cident))
 
 

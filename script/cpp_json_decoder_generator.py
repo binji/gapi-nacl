@@ -36,6 +36,7 @@ class StateInfo(object):
     self.object_states = {}
     self.prop_key_states = collections.defaultdict(list)
     self.string_states = {}
+    self.additional_properties_schemas = {}
     self._Load(schema)
 
   def _Load(self, schema):
@@ -124,11 +125,17 @@ class StateInfoCallbacks(service.ServiceCallbacks):
   def GetPrevCIdent(self, obj):
     return self.CIdentFromContext(_FilterContext(obj.GetContext())[:-1])
 
+  def BeginSchema(self, schema):
+    if schema.additional_properties:
+      info = AddlPropInfo(schema, gapi_utils.SnakeCase(schema.ctype))
+      self.state_info.additional_properties_schemas[schema.name] = info
+
   def BeginProperty(self, prop):
-    # ... X K -> {state: X, next: K}
-    state = self.GetPrevState(prop)
-    next_state = self.GetState(prop)
-    self.state_info.prop_key_states[state].append(PropInfo(prop, next_state))
+    if not prop.is_additional_properties:
+      # ... X K -> {state: X, next: K}
+      state = self.GetPrevState(prop)
+      next_state = self.GetState(prop)
+      self.state_info.prop_key_states[state].append(PropInfo(prop, next_state))
 
   def PrimitivePropertyType(self, prop_type):
     # ... X K -> {state: K, prev: X}
@@ -177,6 +184,7 @@ class StateInfoCallbacks(service.ServiceCallbacks):
 Info = collections.namedtuple(
     'Info', ['prop_type', 'cident', 'next_state', 'prev_state'])
 PropInfo = collections.namedtuple('PropStateInfo', ['prop', 'next_state'])
+AddlPropInfo = collections.namedtuple('AddlPropInfo', ['schema', 'cident'])
 
 
 TEMPLATE_DECLARE_SCHEMA = """\
@@ -202,6 +210,9 @@ class {{schema.cbtype}} : public JsonCallbacks {
 
  private:
   {{schema.ctype}}* data_;
+[[for schema_name, info in state_info.additional_properties_schemas.iteritems():]]
+  {{info.schema.additional_properties.ctype}}::iterator {{info.cident}}_iterator_;
+[[]]
   int state_;
 };
 
@@ -328,18 +339,13 @@ int {{schema.cbtype}}::OnMapKey(JsonParser* p, const unsigned char* s, size_t le
   switch (state_) {
 [[for state, info in sorted(state_info.prop_key_states.iteritems()):]]
     case {{state}}:
-      switch (s[0]) {
-[[  for first_char, group in groupby(sorted(info), lambda i:i.prop.name[0]):]]
-        case '{{first_char}}':
-[[  # Sort group in reverse order of name length.]]
-[[    group = sorted(group, lambda x,y: cmp(len(y.prop.name), len(x.prop.name)))]]
-[[    for group_info in group:]]
-          CHECK_MAP_KEY("{{group_info.prop.name}}", {{len(group_info.prop.name)}}, {{group_info.next_state}});
-[[    ]]
-          break;
+[[  for prop, next_state in sorted(info):]]
+      CHECK_MAP_KEY("{{prop.name}}", {{len(prop.name)}}, {{next_state}});
+[[  if prop.schema.additional_properties:]]
+      // Create additional property with this key.
 [[  ]]
-        default: break;
-      }
+      break;
+[[  ]]
 [[]]
     default: break;
   }
