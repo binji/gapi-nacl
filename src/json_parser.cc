@@ -44,10 +44,11 @@ void JsonParser::SetErrorFromStatus(ErrorPtr* error, yajl_status status,
       error->reset();
       break;
 
-    case yajl_status_client_canceled:
-      error->reset(new YajlError(handle_, text, length,
-                                 error_->ToString().c_str()));
+    case yajl_status_client_canceled: {
+      const char* msg = error_ ? error_->ToString().c_str() : "";
+      error->reset(new YajlError(handle_, text, length, msg));
       break;
+    }
 
     case yajl_status_error:
       error->reset(new YajlError(handle_, text, length));

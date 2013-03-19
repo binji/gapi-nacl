@@ -62,6 +62,9 @@ class Schema(object):
     for _, prop in sorted(self.properties.iteritems()):
       for result in prop.Generator():
         yield result
+    if self.additional_properties:
+      for result in self.additional_properties.Generator():
+        yield result
     yield 'EndSchema', self
 
   def _Parse(self, data):
@@ -71,7 +74,7 @@ class Schema(object):
       self.properties[prop_name] = Property(self, prop_name, prop_data)
     if 'additionalProperties' in data:
       self.additional_properties = Property(self, None,
-                                            self.data['additionalProperties'])
+                                            data['additionalProperties'])
 
   def __str__(self):
     return '<Schema %s>' % self.name
@@ -101,7 +104,11 @@ class Schema(object):
 
 class Property(object):
   def __init__(self, schema, name, data):
-    self.name = name
+    self.is_additional_properties = name is None
+    if name is None:
+      self.name = '_additionalProperties'
+    else:
+      self.name = name
     self.schema = schema
     self.description = data.get('description', '').encode('ascii', 'replace')
     self.prop_type = MakePropertyType(self, None, data)
@@ -120,7 +127,28 @@ class Property(object):
 
   @property
   def base_cident(self):
-    return gapi_utils.SnakeCase(self.name)
+    if self.is_additional_properties:
+      return '_additional_properties'
+    else:
+      return gapi_utils.SnakeCase(self.name)
+
+  @property
+  def ctype(self):
+    if self.is_additional_properties:
+      return gapi_utils.WrapType('std::map<std::string, %s>',
+                                 self.prop_type.ctype)
+    else:
+      return self.prop_type.ctype
+
+  @property
+  def ctypedef(self):
+    assert self.is_additional_properties
+    return '%s::%s' % (self.schema.ctype, self.base_ctypedef)
+
+  @property
+  def base_ctypedef(self):
+    assert self.is_additional_properties
+    return 'AddlPropsType'
 
 
 def MakePropertyType(prop, parent_prop_type, data):
@@ -142,11 +170,13 @@ class PropertyType(object):
   def __init__(self, prop, parent_prop_type):
     self.prop = prop
     self.parent_prop_type = parent_prop_type
+    if self.parent_prop_type:
+      self.parent = self.parent_prop_type
+    else:
+      self.parent = self.prop
 
   def GetContext(self):
-    if self.parent_prop_type:
-      return self.parent_prop_type.GetContext() + [self]
-    return self.prop.GetContext() + [self]
+    return self.parent.GetContext() + [self]
 
   def GetPrevContext(self):
     return self.GetContext()[:-1]

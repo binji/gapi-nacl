@@ -34,9 +34,13 @@ class GenerateSchemaCallbacks(service.ServiceCallbacks):
     self.outf = outf
 
   def CIdentFromContext(self, context):
-    cident = ''
+    cident = 'data->'
     index_var = None
+    prev_item = None
     for item in context:
+      if isinstance(prev_item, service.Property):
+        if prev_item.is_additional_properties:
+          cident = 'iter->second'
       if isinstance(item, service.Property):
         cident += item.base_cident
       elif isinstance(item, service.ArrayPropertyType):
@@ -44,6 +48,7 @@ class GenerateSchemaCallbacks(service.ServiceCallbacks):
         cident += '[%s]' % index_var
       elif isinstance(item, service.ObjectPropertyType):
         cident += '.'
+      prev_item = item
     return cident
 
   def IndexVarFromContext(self, context):
@@ -58,7 +63,14 @@ class GenerateSchemaCallbacks(service.ServiceCallbacks):
     for item in context:
       if isinstance(item, service.ArrayPropertyType):
         indent += '  '
+      elif isinstance(item, service.Property) and item.is_additional_properties:
+        indent += '  '
     return indent
+
+  def GetPropKeyAndLen(self, prop):
+    if prop.is_additional_properties:
+      return 'iter->first.c_str()', 'iter->first.length()'
+    return '"%s"' % prop.name, str(len(prop.name))
 
   def BeginSchema(self, schema):
     if not schema.parent_schema:
@@ -68,10 +80,20 @@ class GenerateSchemaCallbacks(service.ServiceCallbacks):
     if not schema.parent_schema:
       self.outf.write(RunTemplateString(TEMPLATE_END_SCHEMA, vars()))
 
+  def BeginProperty(self, prop):
+    if prop.is_additional_properties:
+      cident = self.CIdentFromContext(prop.GetContext())
+      self.outf.write(RunTemplateString(TEMPLATE_BEGIN_ADDL_PROPS, vars()))
+
+  def EndProperty(self, prop):
+    if prop.is_additional_properties:
+      self.outf.write(RunTemplateString(TEMPLATE_END_ADDL_PROPS, vars()))
+
   def PrimitivePropertyType(self, prop_type):
     context = prop_type.GetContext()
     indent = self.IndentFromContext(context)
     cident = self.CIdentFromContext(prop_type.GetContext())
+    prop_key, prop_key_len = self.GetPropKeyAndLen(prop_type.prop)
     self.outf.write(RunTemplateString(TEMPLATE_PRIMITIVE_HEADER, vars(),
                                       output_indent=indent))
     type_macro = TYPE_MACRO_DICT[prop_type.type_format]
@@ -86,6 +108,7 @@ class GenerateSchemaCallbacks(service.ServiceCallbacks):
     context = prop_type.GetPrevContext()
     indent = self.IndentFromContext(context)
     cident = self.CIdentFromContext(context)
+    prop_key, prop_key_len = self.GetPropKeyAndLen(prop_type.prop)
     index_var = self.IndexVarFromContext(prop_type.GetContext())
     self.outf.write(RunTemplateString(TEMPLATE_BEGIN_ARRAY, vars(),
                                       output_indent=indent))
@@ -97,6 +120,7 @@ class GenerateSchemaCallbacks(service.ServiceCallbacks):
 
   def BeginObjectPropertyType(self, prop_type):
     indent = self.IndentFromContext(prop_type.GetContext())
+    prop_key, prop_key_len = self.GetPropKeyAndLen(prop_type.prop)
     self.outf.write(RunTemplateString(TEMPLATE_BEGIN_OBJECT, vars(),
                                       output_indent=indent))
 
@@ -109,6 +133,7 @@ class GenerateSchemaCallbacks(service.ServiceCallbacks):
     context = prop_type.GetContext()
     indent = self.IndentFromContext(context)
     cident = self.CIdentFromContext(context)
+    prop_key, prop_key_len = self.GetPropKeyAndLen(prop_type.prop)
     self.outf.write(RunTemplateString(TEMPLATE_REFERENCE, vars(),
                                       output_indent=indent))
 
@@ -150,25 +175,35 @@ TEMPLATE_END_SCHEMA = """\
 }
 """
 
+TEMPLATE_BEGIN_ADDL_PROPS = """\
+  for ({{prop.ctype}}::const_iterator iter = {{cident}}.begin();
+       iter != {{cident}}.end();
+       ++iter) {
+"""
+
+TEMPLATE_END_ADDL_PROPS = """\
+  }
+"""
+
 TEMPLATE_PRIMITIVE_HEADER = """\
 [[if not prop_type.is_parent_array:]]
-  CHECK_GEN_KEY(\"{{prop_type.prop.name}}\", {{len(prop_type.prop.name)}});
+  CHECK_GEN_KEY({{prop_key}}, {{prop_key_len}});
 """
 
 TEMPLATE_PRIMITIVE_NON_STRING = """\
-  CHECK_GEN1({{type_macro}}, data->{{cident}});
+  CHECK_GEN1({{type_macro}}, {{cident}});
 """
 
 TEMPLATE_PRIMITIVE_STRING = """\
-  CHECK_GEN_STRING(data->{{cident}});
+  CHECK_GEN_STRING({{cident}});
 """
 
 TEMPLATE_BEGIN_ARRAY = """\
 [[if not prop_type.is_parent_array:]]
-  CHECK_GEN_KEY(\"{{prop_type.prop.name}}\", {{len(prop_type.prop.name)}});
+  CHECK_GEN_KEY({{prop_key}}, {{prop_key_len}});
 [[]]
   CHECK_GEN(StartArray);
-  GEN_FOREACH({{index_var}}, data->{{cident}}) {
+  GEN_FOREACH({{index_var}}, {{cident}}) {
 """
 
 TEMPLATE_END_ARRAY = """\
@@ -178,7 +213,7 @@ TEMPLATE_END_ARRAY = """\
 
 TEMPLATE_BEGIN_OBJECT = """\
 [[if not prop_type.is_parent_array:]]
-  CHECK_GEN_KEY(\"{{prop_type.prop.name}}\", {{len(prop_type.prop.name)}});
+  CHECK_GEN_KEY({{prop_key}}, {{prop_key_len}});
 [[]]
   CHECK_GEN(StartMap);
 """
@@ -188,10 +223,10 @@ TEMPLATE_END_OBJECT = """\
 """
 
 TEMPLATE_REFERENCE = """\
-  if (data->{{cident}}.get()) {
+  if ({{cident}}.get()) {
 [[if not prop_type.is_parent_array:]]
-    CHECK_GEN_KEY(\"{{prop_type.prop.name}}\", {{len(prop_type.prop.name)}});
+    CHECK_GEN_KEY({{prop_key}}, {{prop_key_len}});
 [[]]
-    CHECK_ENCODE(data->{{cident}}.get());
+    CHECK_ENCODE({{cident}}.get());
   }
 """

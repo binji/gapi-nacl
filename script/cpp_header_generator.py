@@ -61,9 +61,18 @@ class GenerateSchemaCallbacks(service.ServiceCallbacks):
     self.outf.write('\n')
     for line in prop.description.splitlines():
       WriteWrappedComment(self.outf, line, indent, 80)
+
+    ctype = prop.ctype
+    if prop.is_additional_properties:
+      self.outf.write('%stypedef %s %s;\n' % (
+          indent,
+          prop.ctype,
+          prop.base_ctypedef))
+      ctype = prop.base_ctypedef
+
     self.outf.write('%s%s %s;\n' % (
         indent,
-        prop.prop_type.ctype,
+        ctype,
         prop.base_cident))
 
 

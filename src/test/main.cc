@@ -364,6 +364,80 @@ TEST(ComplexTypesTest, Gen) {
   EXPECT_EQ(0, result);
 }
 
+TEST(SimpleAddlPropsTest, Parse) {
+  struct KeyValuePair {
+    const char* key;
+    int32_t value;
+  };
+  struct TestCase {
+    const char* json;
+    KeyValuePair kvps[3];
+  };
+  TestCase test_cases[] = {
+    { "{}", { {NULL, 0} } },
+    { "{\"ap\": 34}", { {"ap", 34}, {NULL, 0} } },
+    { "{\"prop1\": 100, \"ap\": 34}", { {"ap", 34}, {NULL, 0} } },
+    { "{\"ap\": 34, \"prop1\": 100}", { {"ap", 34}, {NULL, 0} } },
+    { "{\"ap1\": 34, \"ap2\": 100}", { {"ap1", 34}, {"ap2", 100}, {NULL, 0} } },
+  };
+  for (int i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]); ++i) {
+    TestCase* test_case = &test_cases[i];
+    const char* json = test_case->json;
+    test_types_schema::SimpleAddlProps data;
+    MemoryReader reader(&json[0], strlen(json));
+    ErrorPtr error;
+    test_types_schema::Decode(&reader, &data, &error);
+    EXPECT_TRUE(error.get() == NULL)
+        << "For testcase: " << json << "\n"
+        << "Got error: " << error->ToString();
+
+    int expected_count = 0;
+    for (KeyValuePair* kvps = &test_case->kvps[0]; kvps->key; ++kvps) {
+      EXPECT_EQ(kvps->value, data._additional_properties[kvps->key])
+          << "For testcase: " << json;
+      ++expected_count;
+    }
+
+    EXPECT_EQ(data._additional_properties.size(), expected_count);
+  }
+}
+
+TEST(SimpleAddlPropsTest, Gen) {
+  struct KeyValuePair {
+    const char* key;
+    int32_t value;
+  };
+  struct TestCase {
+    int32_t prop1_value;
+    KeyValuePair kvps[3];
+    const char* json;
+  };
+  TestCase test_cases[] = {
+    { 12, { {NULL, 0} }, "{\"prop1\":12}" },
+    { 13, { {"ap", 34}, {NULL, 0} }, "{\"prop1\":13,\"ap\":34}" },
+    { 100, { {"ap", 34}, {NULL, 0} }, "{\"prop1\":100,\"ap\":34}" },
+    { 0, { {"ap1", 34}, {"ap2", 100}, {NULL, 0} },
+        "{\"prop1\":0,\"ap1\":34,\"ap2\":100}" },
+  };
+  for (int i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]); ++i) {
+    TestCase* test_case = &test_cases[i];
+    test_types_schema::SimpleAddlProps data;
+    data.prop1 = test_case->prop1_value;
+
+    for (KeyValuePair* kvps = &test_case->kvps[0]; kvps->key; ++kvps)
+      data._additional_properties[kvps->key] = kvps->value;
+
+    MemoryWriter writer;
+    ErrorPtr error;
+    JsonGeneratorOptions options;
+    test_types_schema::Encode(&writer, &data, options, &error);
+    EXPECT_TRUE(error.get() == NULL) << "Got error: " << error->ToString();
+
+    std::string actual(writer.data().begin(), writer.data().end());
+    EXPECT_STREQ(test_case->json, actual.c_str());
+  }
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

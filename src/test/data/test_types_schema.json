@@ -254,6 +254,20 @@
           }
         }
       }
+    },
+    "SimpleAddlProps": {
+      "id": "SimpleAddlProps",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": "integer",
+          "format": "int32"
+            }
+        },
+      "additionalProperties": {
+        "type": "integer",
+        "format": "int32"
+      }
     }
   }
 }
