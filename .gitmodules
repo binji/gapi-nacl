@@ -4,3 +4,6 @@
 [submodule "third_party/gtest"]
 	path = third_party/gtest
 	url = http://chromium.googlesource.com/chromium/testing/gtest
+[submodule "build/ninja-wrap"]
+	path = build/ninja-wrap
+	url = http://github.com/binji/ninja-wrap.git
