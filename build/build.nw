@@ -1,0 +1,164 @@
+# vim: set syntax=python
+
+ARCHES=('x86_32', 'x86_64', 'arm', 'host')
+CONFIGS=('debug', 'release')
+arch_config={'arch': ARCHES, 'config': CONFIGS}
+
+Variable('nacl_sdk_root', Args['nacl_sdk_root'])
+Variable('toolchain_dir', '$nacl_sdk_root/toolchain')
+Variable('toolchain_dir_x86', '$toolchain_dir/%s_x86_newlib' % Args['platform'])
+Variable('toolchain_dir_arm', '$toolchain_dir/%s_arm_newlib' % Args['platform'])
+Variable('cc-x86_32', '$toolchain_dir_x86/bin/i686-nacl-gcc')
+Variable('cxx-x86_32', '$toolchain_dir_x86/bin/i686-nacl-g++')
+Variable('ar-x86_32', '$toolchain_dir_x86/bin/i686-nacl-ar')
+Variable('cc-x86_64', '$toolchain_dir_x86/bin/x86_64-nacl-gcc')
+Variable('cxx-x86_64', '$toolchain_dir_x86/bin/x86_64-nacl-g++')
+Variable('ar-x86_64', '$toolchain_dir_x86/bin/x86_64-nacl-ar')
+Variable('cc-arm', '$toolchain_dir_arm/bin/arm-nacl-gcc')
+Variable('cxx-arm', '$toolchain_dir_arm/bin/arm-nacl-g++')
+Variable('ar-arm', '$toolchain_dir_arm/bin/arm-nacl-ar')
+Variable('nmf', '$nacl_sdk_root/tools/create_nmf.py')
+Variable('cc-host', 'gcc')
+Variable('cxx-host', 'g++')
+Variable('ar-host', 'ar')
+
+Rule('cp', 'cp $in $out', 'COPY $out')
+Rule('cc', '$cc $ccflags -MMD -MF $out.d -c $in -o $out', 'CC $out',
+     depfile='$out.d')
+Rule('ar', '$ar rc $out $in', 'AR $out')
+Rule('link', '$cc $in $ldflags -o $out', 'LINK $out')
+#Rule('nmf', '$nmf $in -o $out', 'NMF $out')
+
+sources = Build('out/{arch}/{config}/{inf:-ext}.o', 'cc', '{inf}') \
+    .Tag('{name}-sources')
+lib = Build('out/{arch}/{config}/lib{name}.a', 'ar').Tag('{name}-lib')
+exe = Build('out/{name}_{arch}_{config}.nexe', 'link').Tag('{name}-exe')
+#nmf = Build('out/{name}_{config}.nmf', 'nmf').Tag('{name}-nmf')
+
+# YAJL #########################################################################
+
+YAJL_SOURCES = GlobList(
+  'third_party/yajl/src/*.c',
+)
+
+# YAJL headers
+YAJL_BASE_HEADERS = [
+  'yajl_common.h',
+  'yajl_gen.h',
+  'yajl_parse.h',
+  'yajl_tree.h',
+]
+yajl_headers = Build('out/yajl/{basename}', 'cp',
+                     'third_party/yajl/src/api/{basename}').Tag('yajl-headers')
+yajl_headers.ForEach(basename=YAJL_BASE_HEADERS)
+
+# Generate YAJL version file
+Rule('version', 'script/version.py $in -o $out', 'VERSION $out',
+    implicit='script/version.py')
+Build('out/yajl/yajl_version.h', 'version',
+    'third_party/yajl/src/api/yajl_version.h.cmake').Tag('yajl-headers')
+
+for b in sources.ForEach(name='yajl', inf=YAJL_SOURCES, **arch_config):
+  b.Set('order_only', Select('yajl-headers').outputs)
+  b.Set('ccflags', Prefix('-I', 'out'))
+  b.Append('ccflags', '-std=c99')
+for b in lib.ForEach(name='yajl', **arch_config):
+  b.Set('inputs', Select('yajl-sources').And(keys=b.keys).outputs)
+
+# GTEST ########################################################################
+
+GTEST_SOURCES = ['third_party/gtest/src/gtest-all.cc']
+GTEST_INCLUDE_DIRS = [
+  'third_party/gtest/include',
+  'third_party/gtest',
+]
+
+for b in sources.ForEach(name='gtest', inf=GTEST_SOURCES, **arch_config):
+  b.Set('ccflags', Prefix('-I', GTEST_INCLUDE_DIRS))
+for b in lib.ForEach(name='gtest', **arch_config):
+  b.Set('inputs', Select('gtest-sources').And(keys=b.keys).outputs)
+
+# GAPI #########################################################################
+
+GAPI_SOURCES = [
+  'src/error.cc',
+  'src/io.cc',
+  'src/json_parser.cc',
+  'src/json_generator.cc',
+]
+
+GAPI_INCLUDE_DIRS = [
+  'src',
+  'out',
+]
+
+for b in sources.ForEach(name='gapi', inf=GAPI_SOURCES, **arch_config):
+  b.Set('ccflags', Prefix('-I', GAPI_INCLUDE_DIRS))
+for b in lib.ForEach(name='gapi', **arch_config):
+  b.Set('inputs', Select('gapi-sources').And(keys=b.keys).outputs)
+
+# TEST #########################################################################
+Rule('gapi-gen', 'script/gapi.py $in -o $outbase $flags', 'GAPI-GEN $out',
+    implicit=[
+        'script/cpp_header_generator.py',
+        'script/cpp_json_constructor_generator.py',
+        'script/cpp_json_decoder_generator.py',
+        'script/cpp_json_encoder_generator.py',
+        'script/cpp_source_generator.py',
+        'script/easy_template.py',
+        'script/gapi.py',
+        'script/gapi_utils.py',
+        'script/service.py'])
+
+gen = Build('out/gen/{inf:-ext}.cc', 'gapi-gen', '{inf}',
+            outbase='out/gen/{inf:-ext}',
+            flags='-n {inf:base}').Tag('{name}-gen')
+
+TEST_GEN_SOURCES = [
+  'src/test/data/simple_schema.json',
+  'src/test/data/urlshortener_schema.json',
+  'src/test/data/test_types_schema.json',
+]
+
+gen.ForEach(name='test', inf=TEST_GEN_SOURCES)
+
+GAPI_TEST_SOURCES = ['src/test/main.cc'] + Select('test-gen').outputs
+
+for b in Select('test-gen'):
+  b.Append('outputs', 'out/gen/{inf:-ext}.h')
+
+GAPI_TEST_INCLUDE_DIRS = [
+  '.',
+  'src',
+  'out',
+  'third_party/gtest/include',
+]
+
+for b in sources.ForEach(name='gapi_test', inf=GAPI_TEST_SOURCES,
+                         arch='host', config=CONFIGS):
+  b.Set('ccflags', Prefix('-I', GAPI_TEST_INCLUDE_DIRS))
+for b in exe.ForEach(name='gapi_test', arch='host', config=CONFIGS):
+  b.Set('outputs', 'out/{name}_{arch}_{config}')
+  b.Set('ldflags', '-pthread')
+  b.Append('inputs', Select('gapi_test-sources').And(keys=b.keys).outputs)
+  subkeys = b.SubKeys('arch', 'config')
+  for lib in ('gapi', 'gtest', 'yajl'):
+    b.Append('inputs', Select(lib + '-lib').And(keys=subkeys).outputs)
+
+
+################################################################################
+
+for b in Select(keys={'config': 'debug'}).And(rule='cc'):
+  b.Append('ccflags', '-g -O0')
+for b in Select(keys={'config': 'release'}).And(rule='cc'):
+  b.Append('ccflags', '-g -O3')
+for b in Select(rule='cc'):
+  ext = Filename(b.inputs).Extension
+  if ext in ('.cc', '.cpp'):
+    b.Set('cc', '$cxx-{arch}')
+  elif ext == '.c':
+    b.Set('cc', '$cc-{arch}')
+for b in Select(rule='link'):
+  b.Set('cc', '$cxx-{arch}')
+for b in Select(rule='ar'):
+  b.Set('ar', '$ar-{arch}')
