@@ -118,6 +118,12 @@
     state_ = STATE; \
     return 1; }
 
+#define MAP_KEY_ADDL_PROPS(IDENT, TYPE) { \
+  const char* ss = reinterpret_cast<const char*>(s); \
+  std::string key(ss, ss + length); \
+  IDENT.insert(TYPE::value_type(key, TYPE::mapped_type())); }
+
+
 // Encoding
 
 #define CHECK_GEN(NAME) if (!g->Gen##NAME(error)) return false

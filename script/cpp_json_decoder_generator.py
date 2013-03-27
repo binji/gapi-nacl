@@ -43,79 +43,53 @@ class StateInfo(object):
     service.Iterate(schema, StateInfoCallbacks(self))
 
 
-def _FilterContext(context):
-#  types = (service.Property, service.ArrayPropertyType,
-#           service.ObjectPropertyType)
-#  IsTypesInstance = lambda x: isinstance(x, types)
-#  return filter(IsTypesInstance, context)
-  return context
-
-
-#def _PopKeyContextItem(context):
-#  if isinstance(context[-1], service.Property):
-#    return context[:-1]
-#  return context
-
-
-def _GetStateFromContext(context, prev, non_key):
+def _GetStateFromContext(context, non_key):
   # X K -> {X}{NAME}_K
   # X K A... -> {X}{NAME}_A
   # X K A... O -> {X}{NAME}_A...O
-  IsProp = lambda x: isinstance(x, service.Property)
-  IsArray = lambda x: isinstance(x, service.ArrayPropertyType)
-  IsObject = lambda x: isinstance(x, service.ObjectPropertyType)
-
-  def FilterFunc(x):
-    return isinstance(x, (service.Property, service.ArrayPropertyType,
-                          service.ObjectPropertyType))
-  context = filter(FilterFunc, context)
-
-  if prev:
-    context = context[:-1]
-  if non_key and IsProp(context[-1]):
-    context = context[:-1]
-
-  if not context:
+  state = ''
+  is_first = True
+  for item in reversed(context):
+    if isinstance(item, service.Property):
+      if is_first and not non_key:
+        state = 'K'
+      if not (is_first and non_key):
+        state = '_%s_' % gapi_utils.Upper(item.name) + state
+    elif isinstance(item, service.ArrayPropertyType):
+      state = 'A' + state
+    elif isinstance(item, service.ObjectPropertyType):
+      state = 'O' + state
+    else:
+      continue
+    is_first = False
+  if not state:
     return 'STATE_TOP'
-
-  i = 0
-  state = 'STATE'
-  assert IsProp(context[0])
-  while i < len(context):
-    state += '_%s_' % gapi_utils.Upper(context[i].name)
-    i += 1
-    while i < len(context) and not IsProp(context[i]):
-      if IsArray(context[i]): state += 'A'
-      if IsObject(context[i]): state += 'O'
-      i += 1
-  if IsProp(context[-1]):
-    state += 'K'
-  return state
+  return 'STATE' + state
 
 
 def _GetAddlPropIteratorCIdent(schema):
   return gapi_utils.SnakeCase(schema.name) + '_iterator_'
 
 
-def _GetCIdentFromContext(context, prev):
-  IsProp = lambda x: isinstance(x, service.Property)
-  IsArray = lambda x: isinstance(x, service.ArrayPropertyType)
-  IsObject = lambda x: isinstance(x, service.ObjectPropertyType)
-
-  cident = 'data_->'
-  prev_item = None
-  for item in context:
-    if IsArray(prev_item):
-      cident += '.back()'
-    elif IsProp(prev_item) and prev_item.is_additional_properties:
-      cident = self.AddlPropIteratorCIdent(prev_item.schema)
-
-    if IsProp(item):
-      cident += item.base_cident
-    elif IsObject(item):
-      cident += '.'
-    prev_item = item
-  return cident
+def _GetCIdentFromContext(context):
+  cident = ''
+  is_first = True
+  for item in reversed(context):
+    if isinstance(item, service.Property):
+      cident = item.base_cident + cident
+    elif isinstance(item, service.ArrayPropertyType):
+      if not is_first:
+        cident = '.back()' + cident
+    elif isinstance(item, service.ObjectPropertyType):
+      cident = '.' + cident
+    elif (isinstance(item, service.PropertyType) and
+          item.prop.is_additional_properties):
+      iter_name = _GetAddlPropIteratorCIdent(item.prop.schema)
+      return '%s->second%s' % (iter_name, cident)
+    else:
+      continue
+    is_first = False
+  return 'data_->' + cident
 
 
 class StateInfoCallbacks(service.ServiceCallbacks):
@@ -123,27 +97,18 @@ class StateInfoCallbacks(service.ServiceCallbacks):
     self.state_info = state_info
 
   def GetState(self, obj):
-    return self._GetState(obj.GetContext(), prev=False, non_key=False)
+    return self._GetState(obj.GetContext(), non_key=False)
 
   def GetNonKeyState(self, obj):
-    return self._GetState(obj.GetContext(), prev=False, non_key=True)
+    return self._GetState(obj.GetContext(), non_key=True)
 
-  def GetPrevState(self, obj):
-    return self._GetState(obj.GetContext(), prev=True, non_key=False)
-
-  def GetPrevNonKeyState(self, obj):
-    return self._GetState(obj.GetContext(), prev=True, non_key=True)
-
-  def _GetState(self, context, prev, non_key):
-    state = _GetStateFromContext(context, prev, non_key)
+  def _GetState(self, context, non_key):
+    state = _GetStateFromContext(context, non_key)
     self.state_info.states.add(state)
     return state
 
   def GetCIdent(self, obj):
-    return _GetCIdentFromContext(obj.GetContext(), prev=False)
-
-  def GetPrevCIdent(self, obj):
-    return _GetCIdentFromContext(obj.GetContext(), prev=True)
+    return _GetCIdentFromContext(obj.GetContext())
 
   def BeginSchema(self, schema):
     if schema.additional_properties:
@@ -152,7 +117,7 @@ class StateInfoCallbacks(service.ServiceCallbacks):
 
   def BeginProperty(self, prop):
     # ... X K -> {state: X, next: K}
-    state = self.GetPrevState(prop)
+    state = self.GetState(prop.schema)
     next_state = self.GetState(prop)
     cident = self.GetCIdent(prop)
     info = PropInfo(prop, next_state, cident)
@@ -176,20 +141,20 @@ class StateInfoCallbacks(service.ServiceCallbacks):
   def BeginArrayPropertyType(self, prop_type):
     # ... X K A -> {state: K, next: A, prev: X}
     # ... A1 A2 -> {state: A1, next: A2, prev: A1}
-    state = self.GetPrevState(prop_type)
+    state = self.GetState(prop_type.parent)
     next_state = self.GetState(prop_type)
-    prev_state = self.GetPrevNonKeyState(prop_type)
-    cident = self.GetPrevCIdent(prop_type)
+    prev_state = self.GetNonKeyState(prop_type.parent)
+    cident = self.GetCIdent(prop_type.parent)
     self.state_info.array_states[state] = \
         Info(prop_type, cident, next_state, prev_state)
 
   def BeginObjectPropertyType(self, prop_type):
     # ... X K O -> {state: K, next: O, prev: X}
     # ... A O -> {state: A, next: O, prev: A}
-    state = self.GetPrevState(prop_type)
+    state = self.GetState(prop_type.parent)
     next_state = self.GetState(prop_type)
-    prev_state = self.GetPrevNonKeyState(prop_type)
-    cident = self.GetPrevCIdent(prop_type)
+    prev_state = self.GetNonKeyState(prop_type.parent)
+    cident = self.GetCIdent(prop_type.parent)
     self.state_info.object_states[state] = \
         Info(prop_type, cident, next_state, prev_state)
 
@@ -359,7 +324,7 @@ int {{schema.cbtype}}::OnMapKey(JsonParser* p, const unsigned char* s, size_t le
   if (length == 0) return 0;
   switch (state_) {
 [[for state, info in sorted(state_info.prop_key_states.iteritems()):]]
-    case {{state}}: {
+    case {{state}}:
 [[  addl_prop, addl_prop_cident = None, None]]
 [[  for prop, next_state, cident in sorted(info):]]
 [[    if prop.is_additional_properties:]]
@@ -367,12 +332,9 @@ int {{schema.cbtype}}::OnMapKey(JsonParser* p, const unsigned char* s, size_t le
 [[    else:]]
       CHECK_MAP_KEY("{{prop.name}}", {{len(prop.name)}}, {{next_state}});
 [[  if addl_prop:]]
-      const char* ss = reinterpret_cast<const char*>(s);
-      std::string key(ss, ss + length);
-      {{addl_prop_cident}}.insert({{addl_prop.ctype}}::value_type(key, {{addl_prop.ctype}}::mapped_type()));
+      MAP_KEY_ADDL_PROPS({{addl_prop_cident}}, {{addl_prop.ctypedef}});
 [[  ]]
       break;
-    }
 [[  ]]
 [[]]
     default: break;

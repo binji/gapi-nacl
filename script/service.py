@@ -132,7 +132,6 @@ class Property(object):
     else:
       return gapi_utils.SnakeCase(self.name)
 
-
   @property
   def ctype(self):
     if self.is_additional_properties:
@@ -140,6 +139,16 @@ class Property(object):
                                  self.prop_type.ctype)
     else:
       return self.prop_type.ctype
+
+  @property
+  def ctypedef(self):
+    assert self.is_additional_properties
+    return '%s::%s' % (self.schema.ctype, self.base_ctypedef)
+
+  @property
+  def base_ctypedef(self):
+    assert self.is_additional_properties
+    return 'AddlPropsType'
 
 
 def MakePropertyType(prop, parent_prop_type, data):
@@ -161,11 +170,13 @@ class PropertyType(object):
   def __init__(self, prop, parent_prop_type):
     self.prop = prop
     self.parent_prop_type = parent_prop_type
+    if self.parent_prop_type:
+      self.parent = self.parent_prop_type
+    else:
+      self.parent = self.prop
 
   def GetContext(self):
-    if self.parent_prop_type:
-      return self.parent_prop_type.GetContext() + [self]
-    return self.prop.GetContext() + [self]
+    return self.parent.GetContext() + [self]
 
   def GetPrevContext(self):
     return self.GetContext()[:-1]

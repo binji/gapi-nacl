@@ -264,7 +264,7 @@
           "format": "int32"
             }
         },
-      "_additionalProperties": {
+      "additionalProperties": {
         "type": "string"
       }
     }
