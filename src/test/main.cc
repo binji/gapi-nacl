@@ -364,6 +364,34 @@ TEST(ComplexTypesTest, Gen) {
   EXPECT_EQ(0, result);
 }
 
+TEST(SimpleAddlPropsTest, Parse) {
+  struct KeyValuePair {
+    const char* key;
+    int32_t value;
+  };
+  struct TestCase {
+    const char* json;
+    KeyValuePair kvps[3];
+  };
+  TestCase test_cases[] = {
+    { "{}", { {NULL, 0} } },
+    { "{\"prop2\": 34}", { {"prop2", 34}, {NULL, 0} } },
+  };
+  for (int i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]); ++i) {
+    TestCase* test_case = &test_cases[i];
+    const char* json = test_case->json;
+    test_types_schema::SimpleAddlProps data;
+    MemoryReader reader(&json[0], strlen(json));
+    ErrorPtr error;
+    test_types_schema::Decode(&reader, &data, &error);
+
+    KeyValuePair* kvps = &test_case->kvps[0];
+    while (kvps->key) {
+      ASSERT_EQ(kvps->value, data._additional_properties[kvps->key]);
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
