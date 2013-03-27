@@ -5,7 +5,9 @@ def MixedCaseToSnakeCase(s):
   result = ''
   for c in s:
     if c.isupper():
-      result += '_' + c.lower()
+      if result:
+        result += '_'
+      result += c.lower()
     else:
       result += c
   return result

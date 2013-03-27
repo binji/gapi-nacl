@@ -2,21 +2,21 @@
 #define JSON_PARSER_MACROS_H_
 
 #define PUSH_CALLBACK_REF_AND_RETURN(TYPE, CBTYPE, IDENT) \
-  data_->IDENT.reset(new TYPE()); \
-  p->PushCallbacks(new CBTYPE(data_->IDENT.get())); \
+  IDENT.reset(new TYPE()); \
+  p->PushCallbacks(new CBTYPE(IDENT.get())); \
   return p->OnStartMap()
 
 #define PUSH_CALLBACK_REF_ARRAY_AND_RETURN(TYPE, CBTYPE, IDENT) \
-  data_->IDENT.push_back(std::tr1::shared_ptr<TYPE>(new TYPE())); \
-  p->PushCallbacks(new CBTYPE(data_->IDENT.back().get())); \
+  IDENT.push_back(std::tr1::shared_ptr<TYPE>(new TYPE())); \
+  p->PushCallbacks(new CBTYPE(IDENT.back().get())); \
   return p->OnStartMap()
 
 #define APPEND_BOOL_AND_RETURN(IDENT) \
-  data_->IDENT.push_back(value); \
+  IDENT.push_back(value); \
   return 1
 
 #define SET_BOOL_AND_RETURN(IDENT, STATE) \
-  data_->IDENT = value; \
+  IDENT = value; \
   state_ = STATE; \
   return 1
 
@@ -35,7 +35,7 @@
 
 #define APPEND_INT_AND_RETURN(TYPE, IDENT, FUNC, FUNC_TYPE) { \
   CONVERT_AND_CHECK_INT(TYPE, FUNC, FUNC_TYPE) \
-  data_->IDENT.push_back(static_cast<TYPE>(value)); } \
+  IDENT.push_back(static_cast<TYPE>(value)); } \
   return 1
 
 #define APPEND_INT32_AND_RETURN(IDENT) \
@@ -52,7 +52,7 @@
 
 #define SET_INT_AND_RETURN(TYPE, IDENT, FUNC, FUNC_TYPE, STATE) { \
   CONVERT_AND_CHECK_INT(TYPE, FUNC, FUNC_TYPE) \
-  data_->IDENT = static_cast<TYPE>(value); } \
+  IDENT = static_cast<TYPE>(value); } \
   state_ = STATE; \
   return 1
 
@@ -81,7 +81,7 @@
 
 #define APPEND_FP_AND_RETURN(TYPE, IDENT, FUNC) { \
   CONVERT_AND_CHECK_FP(TYPE, FUNC) \
-  data_->IDENT.push_back(value); } \
+  IDENT.push_back(value); } \
   return 1
 
 #define APPEND_FLOAT_AND_RETURN(IDENT) \
@@ -92,7 +92,7 @@
 
 #define SET_FP_AND_RETURN(TYPE, IDENT, FUNC, STATE) { \
   CONVERT_AND_CHECK_FP(TYPE, FUNC) \
-  data_->IDENT = value; } \
+  IDENT = value; } \
   state_ = STATE; \
   return 1
 
@@ -103,12 +103,12 @@
   SET_FP_AND_RETURN(double, IDENT, strtod, STATE)
 
 #define APPEND_STRING_AND_RETURN(IDENT) \
-  data_->IDENT.push_back( \
+  IDENT.push_back( \
       std::string(reinterpret_cast<const char*>(s), length)); \
   return 1
 
 #define SET_STRING_AND_RETURN(IDENT, STATE) \
-  data_->IDENT.assign(reinterpret_cast<const char*>(s), length); \
+  IDENT.assign(reinterpret_cast<const char*>(s), length); \
   state_ = STATE; \
   return 1
 
