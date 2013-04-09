@@ -36,11 +36,13 @@ class GenerateSchemaCallbacks(service.ServiceCallbacks):
   def CIdentFromContext(self, context):
     cident = 'data->'
     index_var = None
+    iter_var = None
     prev_item = None
     for item in context:
       if isinstance(prev_item, service.Property):
         if prev_item.is_additional_properties:
-          cident = 'iter->second'
+          index_var = _IncrementIndexVar(index_var)
+          cident = '%s->second' % index_var
       if isinstance(item, service.Property):
         cident += item.base_cident
       elif isinstance(item, service.ArrayPropertyType):
@@ -54,7 +56,9 @@ class GenerateSchemaCallbacks(service.ServiceCallbacks):
   def IndexVarFromContext(self, context):
     index_var = None
     for item in context:
-      if isinstance(item, service.ArrayPropertyType):
+      if (isinstance(item, service.ArrayPropertyType) or
+          (isinstance(item, service.Property) and
+           item.is_additional_properties)):
         index_var = _IncrementIndexVar(index_var)
     return index_var
 
@@ -69,7 +73,9 @@ class GenerateSchemaCallbacks(service.ServiceCallbacks):
 
   def GetPropKeyAndLen(self, prop):
     if prop.is_additional_properties:
-      return 'iter->first.c_str()', 'iter->first.length()'
+      index_var = self.IndexVarFromContext(prop.GetContext())
+      return ('%s->first.c_str()' % index_var,
+              '%s->first.length()' % index_var)
     return '"%s"' % prop.name, str(len(prop.name))
 
   def BeginSchema(self, schema):
@@ -83,11 +89,16 @@ class GenerateSchemaCallbacks(service.ServiceCallbacks):
   def BeginProperty(self, prop):
     if prop.is_additional_properties:
       cident = self.CIdentFromContext(prop.GetContext())
-      self.outf.write(RunTemplateString(TEMPLATE_BEGIN_ADDL_PROPS, vars()))
+      indent = self.IndentFromContext(prop.schema.GetContext())
+      index_var = self.IndexVarFromContext(prop.GetContext())
+      self.outf.write(RunTemplateString(TEMPLATE_BEGIN_ADDL_PROPS, vars(),
+                                        output_indent=indent))
 
   def EndProperty(self, prop):
     if prop.is_additional_properties:
-      self.outf.write(RunTemplateString(TEMPLATE_END_ADDL_PROPS, vars()))
+      indent = self.IndentFromContext(prop.schema.GetContext())
+      self.outf.write(RunTemplateString(TEMPLATE_END_ADDL_PROPS, vars(),
+                                        output_indent=indent))
 
   def PrimitivePropertyType(self, prop_type):
     context = prop_type.GetContext()
@@ -176,9 +187,7 @@ TEMPLATE_END_SCHEMA = """\
 """
 
 TEMPLATE_BEGIN_ADDL_PROPS = """\
-  for ({{prop.ctype}}::const_iterator iter = {{cident}}.begin();
-       iter != {{cident}}.end();
-       ++iter) {
+  GEN_FOREACH_ITER({{index_var}}, {{cident}}, {{prop.ctypedef}}) {
 """
 
 TEMPLATE_END_ADDL_PROPS = """\

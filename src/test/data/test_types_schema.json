@@ -262,11 +262,66 @@
         "prop1": {
           "type": "integer",
           "format": "int32"
-            }
-        },
+        }
+      },
       "additionalProperties": {
         "type": "integer",
         "format": "int32"
+      }
+    },
+    "ComplexAddlProps": {
+      "id": "ComplexAddlProps",
+      "type": "object",
+      "_properties": {
+        "foo": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "properties": {
+        "embedded": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "array": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        },
+        "nested": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "dummy": {
+                "type": "integer",
+                "format": "int32"
+              }
+            },
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        },
+        "innerArray": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
       }
     }
   }

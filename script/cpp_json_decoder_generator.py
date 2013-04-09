@@ -77,18 +77,18 @@ def _GetCIdentFromContext(context):
   for item in reversed(context):
     if isinstance(item, service.Property):
       cident = item.base_cident + cident
+      is_first = False
     elif isinstance(item, service.ArrayPropertyType):
       if not is_first:
         cident = '.back()' + cident
+      is_first = False
     elif isinstance(item, service.ObjectPropertyType):
       cident = '.' + cident
-    elif (isinstance(item, service.PropertyType) and
-          item.prop.is_additional_properties):
-      iter_name = _GetAddlPropIteratorCIdent(item.prop.schema)
-      return '%s->second%s' % (iter_name, cident)
-    else:
-      continue
-    is_first = False
+      is_first = False
+    if isinstance(item, service.PropertyType):
+      if item.prop.is_additional_properties:
+        iter_name = _GetAddlPropIteratorCIdent(item.prop.schema)
+        return '%s->second%s' % (iter_name, cident)
   return 'data_->' + cident
 
 
@@ -199,7 +199,7 @@ class {{schema.cbtype}} : public JsonCallbacks {
  private:
   {{schema.ctype}}* data_;
 [[for schema_name, info in state_info.additional_properties_schemas.iteritems():]]
-  {{info.schema.additional_properties.ctype}}::iterator {{info.cident}};
+  {{info.schema.additional_properties.ctypedef}}::iterator {{info.cident}};
 [[]]
   int state_;
 };

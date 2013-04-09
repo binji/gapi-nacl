@@ -134,5 +134,6 @@
 #define CHECK_GEN_STRING(ARG) if (!g->GenString(ARG.data(), ARG.size(), error)) return false
 #define CHECK_ENCODE(ARG) if (!Encode(g, ARG, error)) return false
 #define GEN_FOREACH(IX, ARRAY) for (size_t IX = 0; IX < ARRAY.size(); ++IX)
+#define GEN_FOREACH_ITER(IX, VAR, TYPE) for (TYPE::const_iterator IX = VAR.begin(); IX != VAR.end(); ++IX)
 
 #endif  // JSON_PARSER_MACROS_H_
