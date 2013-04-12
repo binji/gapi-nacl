@@ -49,20 +49,19 @@ def main(args):
     d = ReadCachedJson(DISCOVERY_API, API_JSON)
     for item in d['items']:
       basename = 'out/%s_%s' % (item['name'], item['version'])
-      service_json = ReadCachedJson(item['discoveryRestUrl'], json_name)
+      service_json = ReadCachedJson(item['discoveryRestUrl'], basename + '.json')
       inputs.append((basename, service_json))
 
   for basename, service_json in inputs:
-    basename = options.outbasename
     header_name = basename + '.h'
     source_name = basename + '.cc'
     s = service.Service(service_json)
-    Generate(cpp_header_generator, header_name, s,
-             header_name=header_name,
-             namespace=options.namespace)
-    Generate(cpp_source_generator, source_name, s,
-             header_name=header_name,
-             namespace=options.namespace)
+#    Generate(cpp_header_generator, header_name, s,
+#             header_name=header_name,
+#             namespace=options.namespace)
+#    Generate(cpp_source_generator, source_name, s,
+#             header_name=header_name,
+#             namespace=options.namespace)
 
 
 def Generate(generator, outfname, service, **kwargs):

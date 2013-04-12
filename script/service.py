@@ -19,9 +19,16 @@ TYPE_DICT = {
 }
 
 
+def ParseNamedItems(data, key, out_dict, out_factory):
+  for item_name, item_data in sorted(data.get(key, {}).iteritems()):
+    assert item_name not in out_dict
+    out_dict[item_name] = out_factory(item_name, item_data)
+
+
 class Service(object):
   def __init__(self, data):
     self.schemas = {}
+    self.resources = {}
     self._Parse(data)
     self._FixReferences()
 
@@ -31,10 +38,9 @@ class Service(object):
         yield result
 
   def _Parse(self, data):
-    for schema_name, schema_data in \
-        sorted(data.get('schemas', {}).iteritems()):
-      assert schema_name not in self.schemas
-      self.schemas[schema_name] = Schema(None, schema_name, schema_data)
+    schema_factory = lambda n, d: Schema(None, n, d)
+    ParseNamedItems(data, 'schemas', self.schemas, schema_factory)
+    ParseNamedItems(data, 'resources', self.resources, Resource)
 
   def _FixReferences(self):
     for typ, data in self.Generator():
@@ -68,10 +74,8 @@ class Schema(object):
     yield 'EndSchema', self
 
   def _Parse(self, data):
-    for prop_name, prop_data in \
-        sorted(data.get('properties', {}).iteritems()):
-      assert prop_name not in self.properties
-      self.properties[prop_name] = Property(self, prop_name, prop_data)
+    property_factory = lambda n, d: Property(self, n, d)
+    ParseNamedItems(data, 'properties', self.properties, property_factory)
     if 'additionalProperties' in data:
       self.additional_properties = Property(self, None,
                                             data['additionalProperties'])
@@ -275,3 +279,51 @@ class ServiceCallbacks(object):
   def BeginObjectPropertyType(self, prop_type): pass
   def EndObjectPropertyType(self, prop_type): pass
   def ReferencePropertyType(self, prop_type): pass
+
+
+class Resource(object):
+  def __init__(self, name, data):
+    self.name = name
+    self.methods = {}
+    self._Parse(data)
+
+  def _Parse(self, data):
+    method_factory = lambda n, d: Method(self, n, d)
+    ParseNamedItems(data, 'methods', self.methods, method_factory)
+
+
+class Method(object):
+  def __init__(self, resource, name, data):
+    self.resource = resource
+    self.name = name
+    self.path = data['path']
+    self.http_method = data['httpMethod']
+    self.description = data.get('description', '')
+    self.request_name = data.get('request', {}).get('$ref')
+    self.request = None
+    self.response_name = data.get('response', {}).get('$ref')
+    self.response = None
+
+    self.parameters = {}
+    parameter_factory = lambda n, d: MethodParameter(self, n, d)
+    ParseNamedItems(data, 'parameters', self.parameters, parameter_factory)
+
+    self.parameter_order = []
+    for p in data.get('parameterOrder', []):
+      self.parameter_order.append(self.parameters[p])
+
+    def print_if(key):
+      if data.get(key):
+        print resource.name, name, key, data.get(key)
+
+#    print_if('parameterOrder')
+#    print_if('mediaUpload')
+#    print_if('supportsMediaUpload')
+#    print_if('supportsMediaDownload')
+#    print_if('supportsSubscription')
+#    print_if('scopes')
+
+
+class MethodParameter(object):
+  def __init__(self, method, name, data):
+    pass
