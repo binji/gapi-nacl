@@ -312,18 +312,45 @@ class Method(object):
     for p in data.get('parameterOrder', []):
       self.parameter_order.append(self.parameters[p])
 
-    def print_if(key):
-      if data.get(key):
-        print resource.name, name, key, data.get(key)
+    self.scopes = data.get('scopes')
+    self.supports_media_upload = data.get('supportsMediaUpload', False)
+    self.supports_media_download = data.get('supportsMediaDownload', False)
+    self.supports_subscription = data.get('supportsSubscription', False)
 
-#    print_if('parameterOrder')
-#    print_if('mediaUpload')
-#    print_if('supportsMediaUpload')
-#    print_if('supportsMediaDownload')
-#    print_if('supportsSubscription')
-#    print_if('scopes')
+    skip = [
+      'id',
+      'description',
+      'path',
+      'httpMethod',
+      'request',
+      'response',
+      'parameters',
+      'parameterOrder',
+      'scopes',
+      'supportsMediaUpload',
+      'supportsMediaDownload',
+      'supportsSubscription',
+    ]
+
+    for key, value in data.iteritems():
+      if key not in skip:
+        print resource.name, name, '>>', key, value
 
 
 class MethodParameter(object):
   def __init__(self, method, name, data):
-    pass
+    self.method = method
+    self.name = name
+    self.description = data.get('description', '')
+    self.location = data['location']
+    self.required = data.get('required', False)
+    self.type_format = (data.get('type', ''), data.get('format', ''))
+    self.pattern = data.get('pattern')
+    self.minimum = data.get('minimum')
+    self.maximum = data.get('maximum')
+    self.default = data.get('default')
+    self.repeated = data.get('repeated', False)
+    enums = data.get('enum')
+    enum_descs = data.get('enumDescriptions')
+    if enums and enum_descs:
+      self.enums = zip(enums, enum_descs)

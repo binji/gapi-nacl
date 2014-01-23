@@ -156,8 +156,12 @@ TYPE_MACRO_DICT = {
   ('integer', 'uint32'): 'Uint32',
   ('number', 'double'): 'Double',
   ('number', 'float'): 'Float',
-  ('string', ''): 'String',
+  # TODO(binji): std::vector, instead? (see service.py)
+  ('string', 'byte'): 'String',  # byte array
+  ('string', 'date'): 'String',
+  ('string', 'date-time'): 'String',
   ('string', 'int64'): 'Int64',
+  ('string', ''): 'String',
   ('string', 'uint64'): 'Uint64',
 }
 

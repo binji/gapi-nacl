@@ -45,7 +45,7 @@ def main(args):
       service_json = json.load(inf)
     inputs.append((options.outbasename, service_json))
   else:
-    # Read and generate for all descovery APIs.
+    # Read and generate for all discovery APIs.
     d = ReadCachedJson(DISCOVERY_API, API_JSON)
     for item in d['items']:
       basename = 'out/%s_%s' % (item['name'], item['version'])
@@ -56,12 +56,12 @@ def main(args):
     header_name = basename + '.h'
     source_name = basename + '.cc'
     s = service.Service(service_json)
-#    Generate(cpp_header_generator, header_name, s,
-#             header_name=header_name,
-#             namespace=options.namespace)
-#    Generate(cpp_source_generator, source_name, s,
-#             header_name=header_name,
-#             namespace=options.namespace)
+    Generate(cpp_header_generator, header_name, s,
+             header_name=header_name,
+             namespace=options.namespace)
+    Generate(cpp_source_generator, source_name, s,
+             header_name=header_name,
+             namespace=options.namespace)
 
 
 def Generate(generator, outfname, service, **kwargs):
